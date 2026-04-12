@@ -1,29 +1,29 @@
-﻿using System.Text;
+using System.IO;
 using System.Windows;
-using System.Windows.Controls;
-using System.Windows.Data;
-using System.Windows.Documents;
-using System.Windows.Input;
-using System.Windows.Media;
-using System.Windows.Media.Imaging;
-using System.Windows.Navigation;
-using System.Windows.Shapes;
 
-namespace Discovery
+namespace Discovery;
+
+public partial class MainWindow : Window
 {
-    /// <summary>
-    /// Interaction logic for MainWindow.xaml
-    /// </summary>
-    public partial class MainWindow : Window
+    private readonly SampleImageProcessor _sampleImageProcessor = new();
+
+    public MainWindow()
     {
-        public MainWindow()
+        InitializeComponent();
+    }
+
+    private async void Start_Click(object sender, RoutedEventArgs e)
+    {
+        StatusTextBox.Text = "Processing sample screenshots...";
+
+        try
         {
-            InitializeComponent();
+            var summary = await Task.Run(() => _sampleImageProcessor.ProcessSamples(ProjectRootLocator.ResolveFromBaseDirectory(AppContext.BaseDirectory)));
+            StatusTextBox.Text = SampleProcessingSummaryFormatter.BuildSummaryText(summary);
         }
-
-        private void Start_Click(object sender, RoutedEventArgs e)
+        catch (Exception ex)
         {
-
+            StatusTextBox.Text = $"Processing failed:{Environment.NewLine}{ex}";
         }
     }
 }

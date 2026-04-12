@@ -1,13 +1,42 @@
-﻿<Window x:Class="Discovery.MainWindow"
+<Window x:Class="Discovery.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-        xmlns:local="clr-namespace:Discovery"
         mc:Ignorable="d"
-        Title="MainWindow" Height="154" Width="451">
-    <Grid Margin="0,0,0,-6">
-        <Button Content="Start" HorizontalAlignment="Left" Margin="28,19,0,0" VerticalAlignment="Top" Click="Start_Click" Height="88" Width="373"/>
+        Title="Discovery"
+        Height="280"
+        Width="620"
+        MinHeight="280"
+        MinWidth="620">
+    <Grid Margin="20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
 
+        <StackPanel>
+            <TextBlock FontSize="22" FontWeight="SemiBold" Text="Discovery" />
+            <TextBlock Margin="0,8,0,0"
+                       Foreground="#FF5E5E5E"
+                       TextWrapping="Wrap"
+                       Text="Stage 1 processes static screenshots from the samples folder, detects cluster candidates, and writes annotated debug images to samples\output." />
+        </StackPanel>
+
+        <Button Grid.Row="1"
+                Width="180"
+                Height="44"
+                Margin="0,20,0,16"
+                HorizontalAlignment="Left"
+                Click="Start_Click"
+                Content="Process Samples" />
+
+        <TextBox x:Name="StatusTextBox"
+                 Grid.Row="2"
+                 IsReadOnly="True"
+                 VerticalScrollBarVisibility="Auto"
+                 TextWrapping="Wrap"
+                 FontFamily="Consolas" />
     </Grid>
 </Window>
