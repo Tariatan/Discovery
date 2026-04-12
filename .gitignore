@@ -1,0 +1,8 @@
+.vs
+.dotnet/
+Discovery/bin/
+Discovery/obj/
+Discovery.Tests/bin/
+Discovery.Tests/obj/
+packages
+samples
