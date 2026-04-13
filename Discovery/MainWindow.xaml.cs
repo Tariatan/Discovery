@@ -5,7 +5,7 @@ namespace Discovery;
 
 public partial class MainWindow : Window
 {
-    private readonly SampleImageProcessor _sampleImageProcessor = new();
+    private readonly SampleImageProcessor m_SampleImageProcessor = new();
 
     public MainWindow()
     {
@@ -18,7 +18,7 @@ public partial class MainWindow : Window
 
         try
         {
-            var summary = await Task.Run(() => _sampleImageProcessor.ProcessSamples(ProjectRootLocator.ResolveFromBaseDirectory(AppContext.BaseDirectory)));
+            var summary = await Task.Run(() => m_SampleImageProcessor.ProcessSamples(ProjectRootLocator.ResolveFromBaseDirectory(AppContext.BaseDirectory)));
             StatusTextBox.Text = SampleProcessingSummaryFormatter.BuildSummaryText(summary);
         }
         catch (Exception ex)

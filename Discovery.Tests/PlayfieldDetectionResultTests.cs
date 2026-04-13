@@ -5,17 +5,29 @@ namespace Discovery.Tests;
 public sealed class PlayfieldDetectionResultTests
 {
     [Fact]
-    public void NotFound_HasNoBoundsAndReportsFalse()
+    public void IsFound_BoundsAreEmpty_ReturnsFalse()
     {
-        Assert.False(PlayfieldDetectionResult.NotFound.IsFound);
-        Assert.Empty(PlayfieldDetectionResult.NotFound.MarkerBounds);
+        // Arrange
+        var result = PlayfieldDetectionResult.NotFound;
+
+        // Act
+        var isFound = result.IsFound;
+
+        // Assert
+        Assert.False(isFound);
+        Assert.Empty(result.MarkerBounds);
     }
 
     [Fact]
-    public void IsFound_ReturnsTrueWhenBoundsAreNonEmpty()
+    public void IsFound_BoundsAreNotEmpty_ReturnsTrue()
     {
+        // Arrange
         var result = new PlayfieldDetectionResult(new Rect(10, 20, 30, 40), Array.Empty<Rect>());
 
-        Assert.True(result.IsFound);
+        // Act
+        var isFound = result.IsFound;
+
+        // Assert
+        Assert.True(isFound);
     }
 }

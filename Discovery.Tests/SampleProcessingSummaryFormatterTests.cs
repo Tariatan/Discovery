@@ -3,8 +3,9 @@ namespace Discovery.Tests;
 public sealed class SampleProcessingSummaryFormatterTests
 {
     [Fact]
-    public void BuildSummaryText_FormatsEachResultOnItsOwnLine()
+    public void BuildSummaryText_SummaryContainsResults_FormatsOutputLines()
     {
+        // Arrange
         var summary = new SampleProcessingSummary(
             @"C:\samples",
             @"C:\samples\output",
@@ -13,8 +14,10 @@ public sealed class SampleProcessingSummaryFormatterTests
                 new SampleProcessingResult("02.png", false, 0, @"C:\samples\output\02.annotated.png")
             ]);
 
+        // Act
         var text = SampleProcessingSummaryFormatter.BuildSummaryText(summary);
 
+        // Assert
         var lines = text.Split(Environment.NewLine);
         Assert.Equal("Samples folder: C:\\samples", lines[0]);
         Assert.Equal("Debug output:  C:\\samples\\output", lines[1]);
