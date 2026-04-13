@@ -5,10 +5,10 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d"
         Title="Discovery"
-        Height="280"
-        Width="620"
-        MinHeight="280"
-        MinWidth="620">
+        Height="340"
+        Width="760"
+        MinHeight="340"
+        MinWidth="760">
     <Grid Margin="20">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
@@ -21,16 +21,24 @@
             <TextBlock Margin="0,8,0,0"
                        Foreground="#FF5E5E5E"
                        TextWrapping="Wrap"
-                       Text="Stage 1 processes static screenshots from the samples folder, detects cluster candidates, and writes annotated debug images to samples\output." />
+                       Text="Process static screenshots from the samples folder or capture the current desktop, then detect the playfield, identify cluster candidates, and write annotated debug images." />
         </StackPanel>
 
-        <Button Grid.Row="1"
-                Width="180"
-                Height="44"
-                Margin="0,20,0,16"
-                HorizontalAlignment="Left"
-                Click="Start_Click"
-                Content="Process Samples" />
+        <StackPanel Grid.Row="1"
+                    Orientation="Horizontal"
+                    Margin="0,20,0,16">
+            <Button Width="180"
+                    Height="44"
+                    HorizontalAlignment="Left"
+                    Click="Start_Click"
+                    Content="Process Samples" />
+            <Button Width="220"
+                    Height="44"
+                    Margin="12,0,0,0"
+                    HorizontalAlignment="Left"
+                    Click="CaptureScreen_Click"
+                    Content="Capture Current Screen" />
+        </StackPanel>
 
         <TextBox x:Name="StatusTextBox"
                  Grid.Row="2"

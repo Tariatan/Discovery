@@ -1,5 +1,3 @@
-using System.IO;
-
 namespace Discovery.Tests;
 
 public sealed class ProjectRootLocatorTests

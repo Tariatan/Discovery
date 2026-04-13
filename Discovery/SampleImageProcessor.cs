@@ -67,42 +67,49 @@ internal sealed class SampleImageProcessor
         // the colored density cloud inside it, then annotate the original screenshot.
         foreach (var sampleFile in sampleFiles)
         {
-            using var image = Cv2.ImRead(sampleFile, ImreadModes.Color);
-            if (image.Empty())
-            {
-                throw new InvalidOperationException($"Could not read image: {sampleFile}");
-            }
-
-            var playfieldDetection = m_PlayfieldDetector.Detect(image);
-            using var annotated = image.Clone();
-            IReadOnlyList<Point[]> polygons = Array.Empty<Point[]>();
-
-            if (playfieldDetection.IsFound)
-            {
-                using var playfieldImage = new Mat(image, playfieldDetection.Bounds);
-                using var candidateMask = BuildCandidateMask(playfieldImage);
-                using var densityMask = BuildDensityMask(candidateMask);
-
-                polygons = BuildClusterPolygons(densityMask, playfieldDetection.Bounds.Location);
-                if (polygons.Count == 0)
-                {
-                    polygons = BuildFallbackPolygons(playfieldDetection.Bounds);
-                }
-            }
-
-            DrawDebugOverlay(annotated, playfieldDetection, polygons);
-
-            var outputPath = Path.Combine(outputDirectory, $"{Path.GetFileNameWithoutExtension(sampleFile)}.annotated.png");
-            Cv2.ImWrite(outputPath, annotated);
-
-            results.Add(new SampleProcessingResult(
-                Path.GetFileName(sampleFile),
-                playfieldDetection.IsFound,
-                polygons.Count,
-                outputPath));
+            results.Add(ProcessImageFile(sampleFile, outputDirectory));
         }
 
         return new SampleProcessingSummary(samplesDirectory, outputDirectory, results);
+    }
+
+    public SampleProcessingResult ProcessImageFile(string imagePath, string outputDirectory)
+    {
+        Directory.CreateDirectory(outputDirectory);
+
+        using var image = Cv2.ImRead(imagePath);
+        if (image.Empty())
+        {
+            throw new InvalidOperationException($"Could not read image: {imagePath}");
+        }
+
+        var playfieldDetection = m_PlayfieldDetector.Detect(image);
+        using var annotated = image.Clone();
+        IReadOnlyList<Point[]> polygons = Array.Empty<Point[]>();
+
+        if (playfieldDetection.IsFound)
+        {
+            using var playfieldImage = new Mat(image, playfieldDetection.Bounds);
+            using var candidateMask = BuildCandidateMask(playfieldImage);
+            using var densityMask = BuildDensityMask(candidateMask);
+
+            polygons = BuildClusterPolygons(densityMask, playfieldDetection.Bounds.Location);
+            if (polygons.Count == 0)
+            {
+                polygons = BuildFallbackPolygons(playfieldDetection.Bounds);
+            }
+        }
+
+        DrawDebugOverlay(annotated, playfieldDetection, polygons);
+
+        var outputPath = Path.Combine(outputDirectory, $"{Path.GetFileNameWithoutExtension(imagePath)}.annotated.png");
+        Cv2.ImWrite(outputPath, annotated);
+
+        return new SampleProcessingResult(
+            Path.GetFileName(imagePath),
+            playfieldDetection.IsFound,
+            polygons.Count,
+            outputPath);
     }
 
     private static Mat BuildCandidateMask(Mat playfieldImage)
@@ -163,29 +170,16 @@ internal sealed class SampleImageProcessor
             RetrievalModes.External,
             ContourApproximationModes.ApproxSimple);
 
-        var polygons = new List<Point[]>();
-
-        foreach (var contour in contours)
-        {
-            var area = Cv2.ContourArea(contour);
-            if (area < MinimumClusterArea)
-            {
-                continue;
-            }
-
-            var hull = Cv2.ConvexHull(contour);
-            if (hull.Length < 3)
-            {
-                continue;
-            }
-
-            var simplified = SimplifyPolygon(hull, MaximumPolygonPoints);
-            var shifted = simplified
-                .Select(point => new Point(point.X + playfieldOffset.X, point.Y + playfieldOffset.Y))
-                .ToArray();
-
-            polygons.Add(shifted);
-        }
+        var polygons = (from contour in contours
+            let area = Cv2.ContourArea(contour)
+            where !(area < MinimumClusterArea)
+            select Cv2.ConvexHull(contour)
+            into hull
+            where hull.Length >= 3
+            select SimplifyPolygon(hull, MaximumPolygonPoints)
+            into simplified
+            select simplified.Select(point => new Point(point.X + playfieldOffset.X, point.Y + playfieldOffset.Y))
+                .ToArray()).ToList();
 
         return polygons
             .OrderByDescending(points => Math.Abs(Cv2.ContourArea(points)))

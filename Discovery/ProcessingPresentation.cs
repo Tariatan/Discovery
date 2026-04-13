@@ -41,3 +41,20 @@ internal static class SampleProcessingSummaryFormatter
         return string.Join(Environment.NewLine, lines);
     }
 }
+
+internal static class ScreenCaptureSummaryFormatter
+{
+    public static string BuildSummaryText(ScreenCaptureSummary summary)
+    {
+        var lines = new List<string>
+        {
+            $"Captures folder: {summary.CapturesDirectory}",
+            $"Debug output:   {summary.OutputDirectory}",
+            $"Capture image:  {summary.CapturePath}",
+            string.Empty,
+            $"{summary.Result.FileName,-20} playfield={(summary.Result.PlayfieldFound ? "yes" : "no"),-3}  clusters={summary.Result.ClusterCount}  output={summary.Result.OutputPath}"
+        };
+
+        return string.Join(Environment.NewLine, lines);
+    }
+}

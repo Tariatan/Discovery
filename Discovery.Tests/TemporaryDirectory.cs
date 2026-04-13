@@ -1,5 +1,3 @@
-using System.IO;
-
 namespace Discovery.Tests;
 
 internal sealed class TemporaryDirectory : IDisposable
