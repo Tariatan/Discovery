@@ -8,7 +8,8 @@
         Height="340"
         Width="760"
         MinHeight="340"
-        MinWidth="760">
+        MinWidth="760"
+        Topmost="True">
     <Grid Margin="20">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
@@ -38,6 +39,12 @@
                     HorizontalAlignment="Left"
                     Click="CaptureScreen_Click"
                     Content="Capture Current Screen" />
+            <Button Width="160"
+                    Height="44"
+                    Margin="12,0,0,0"
+                    HorizontalAlignment="Left"
+                    Click="Automate_Click"
+                    Content="Automate" />
         </StackPanel>
 
         <TextBox x:Name="StatusTextBox"

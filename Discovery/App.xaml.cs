@@ -1,4 +1,3 @@
-using System.IO;
 using System.Windows;
 
 namespace Discovery;
@@ -22,7 +21,7 @@ public partial class App
     private static void RunSampleProcessing()
     {
         var processor = new SampleImageProcessor();
-        var summary = processor.ProcessSamples(ResolveProjectRoot());
+        var summary = processor.ProcessSamples();
 
         Console.WriteLine($"Samples folder: {summary.SamplesDirectory}");
         Console.WriteLine($"Debug output:  {summary.OutputDirectory}");
@@ -31,22 +30,5 @@ public partial class App
         {
             Console.WriteLine($"{result.FileName,-12} playfield={(result.PlayfieldFound ? "yes" : "no"),-3}  clusters={result.ClusterCount}  output={result.OutputPath}");
         }
-    }
-
-    private static string ResolveProjectRoot()
-    {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-
-        while (directory is not null)
-        {
-            if (File.Exists(Path.Combine(directory.FullName, "Discovery.sln")))
-            {
-                return directory.FullName;
-            }
-
-            directory = directory.Parent;
-        }
-
-        throw new DirectoryNotFoundException("Could not locate the project root from the application base directory.");
     }
 }

@@ -27,9 +27,15 @@ internal sealed class ScreenCaptureService
         m_SampleImageProcessor = sampleImageProcessor;
     }
 
-    public ScreenCaptureSummary CaptureAndProcessCurrentScreen(string projectRoot)
+    public ScreenCaptureSummary CaptureAndProcessCurrentScreen()
     {
-        var capturesDirectory = Path.Combine(projectRoot, CapturesFolderName);
+        var analysis = CaptureAndAnalyzeCurrentScreen();
+        return new ScreenCaptureSummary(analysis.CapturesDirectory, analysis.OutputDirectory, analysis.CapturePath, analysis.Analysis.Result);
+    }
+
+    internal ScreenCaptureAnalysisSummary CaptureAndAnalyzeCurrentScreen()
+    {
+        var capturesDirectory = CapturesFolderName;
         var outputDirectory = Path.Combine(capturesDirectory, CaptureOutputFolderName);
         Directory.CreateDirectory(capturesDirectory);
 
@@ -40,9 +46,9 @@ internal sealed class ScreenCaptureService
         // Persist the captured desktop first so the exact input remains available
         // for debugging, then process it through the same screenshot pipeline.
         m_ScreenCaptureProvider.CaptureToFile(capturePath);
-        var result = m_SampleImageProcessor.ProcessImageFile(capturePath, outputDirectory);
+        var analysis = m_SampleImageProcessor.AnalyzeImageFile(capturePath, outputDirectory);
 
-        return new ScreenCaptureSummary(capturesDirectory, outputDirectory, capturePath, result);
+        return new ScreenCaptureAnalysisSummary(capturesDirectory, outputDirectory, capturePath, analysis);
     }
 
     internal interface IScreenCaptureProvider
@@ -72,3 +78,9 @@ internal sealed record ScreenCaptureSummary(
     string OutputDirectory,
     string CapturePath,
     SampleProcessingResult Result);
+
+internal sealed record ScreenCaptureAnalysisSummary(
+    string CapturesDirectory,
+    string OutputDirectory,
+    string CapturePath,
+    SampleImageAnalysisResult Analysis);

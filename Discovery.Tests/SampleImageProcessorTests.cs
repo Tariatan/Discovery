@@ -14,7 +14,18 @@ public sealed class SampleImageProcessorTests
         var processor = new SampleImageProcessor();
 
         // Act
-        var exception = Assert.Throws<DirectoryNotFoundException>(() => processor.ProcessSamples(workspace.Path));
+        var currentDirectory = Directory.GetCurrentDirectory();
+        Directory.SetCurrentDirectory(workspace.Path);
+        DirectoryNotFoundException exception;
+
+        try
+        {
+            exception = Assert.Throws<DirectoryNotFoundException>(() => processor.ProcessSamples());
+        }
+        finally
+        {
+            Directory.SetCurrentDirectory(currentDirectory);
+        }
 
         // Assert
         Assert.Contains("Samples folder was not found", exception.Message);
@@ -28,17 +39,28 @@ public sealed class SampleImageProcessorTests
         var samplesDirectory = Directory.CreateDirectory(Path.Combine(workspace.Path, "samples")).FullName;
         CreateSolidImage(Path.Combine(samplesDirectory, "01.png"), 900, 900);
         var processor = new SampleImageProcessor();
+        SampleProcessingSummary summary;
 
         // Act
-        var summary = processor.ProcessSamples(workspace.Path);
+        var currentDirectory = Directory.GetCurrentDirectory();
+        Directory.SetCurrentDirectory(workspace.Path);
+
+        try
+        {
+            summary = processor.ProcessSamples();
+        }
+        finally
+        {
+            Directory.SetCurrentDirectory(currentDirectory);
+        }
 
         // Assert
         var result = Assert.Single(summary.Results);
         Assert.Equal("01.png", result.FileName);
         Assert.False(result.PlayfieldFound);
         Assert.Equal(0, result.ClusterCount);
-        Assert.True(File.Exists(result.OutputPath));
-        Assert.Equal(Path.Combine(samplesDirectory, "output"), summary.OutputDirectory);
+        Assert.True(File.Exists(Path.Combine(workspace.Path, result.OutputPath)));
+        Assert.Equal(Path.Combine("samples", "output"), summary.OutputDirectory);
     }
 
     [Fact]
@@ -46,14 +68,24 @@ public sealed class SampleImageProcessorTests
     {
         // Arrange
         using var workspace = new TemporaryDirectory();
-        var projectRoot = ProjectRootLocator.ResolveFromBaseDirectory(AppContext.BaseDirectory);
         var samplesDirectory = Directory.CreateDirectory(Path.Combine(workspace.Path, "samples")).FullName;
-        File.Copy(Path.Combine(projectRoot, "samples", "05.png"), Path.Combine(samplesDirectory, "05.png"));
+        File.Copy(Path.Combine("samples", "05.png"), Path.Combine(samplesDirectory, "05.png"));
         CreateSolidImage(Path.Combine(samplesDirectory, "99.png"), 900, 900);
         var processor = new SampleImageProcessor();
+        SampleProcessingSummary summary;
 
         // Act
-        var summary = processor.ProcessSamples(workspace.Path);
+        var currentDirectory = Directory.GetCurrentDirectory();
+        Directory.SetCurrentDirectory(workspace.Path);
+
+        try
+        {
+            summary = processor.ProcessSamples();
+        }
+        finally
+        {
+            Directory.SetCurrentDirectory(currentDirectory);
+        }
 
         // Assert
         Assert.Equal(2, summary.Results.Count);
@@ -61,12 +93,12 @@ public sealed class SampleImageProcessorTests
         var foundResult = Assert.Single(summary.Results, result => result.FileName == "05.png");
         Assert.True(foundResult.PlayfieldFound);
         Assert.True(foundResult.ClusterCount > 0);
-        Assert.True(File.Exists(foundResult.OutputPath));
+        Assert.True(File.Exists(Path.Combine(workspace.Path, foundResult.OutputPath)));
 
         var blankResult = Assert.Single(summary.Results, result => result.FileName == "99.png");
         Assert.False(blankResult.PlayfieldFound);
         Assert.Equal(0, blankResult.ClusterCount);
-        Assert.True(File.Exists(blankResult.OutputPath));
+        Assert.True(File.Exists(Path.Combine(workspace.Path, blankResult.OutputPath)));
     }
 
     private static void CreateSolidImage(string path, int width, int height)

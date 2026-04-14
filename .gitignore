@@ -6,3 +6,5 @@ Discovery.Tests/bin/
 Discovery.Tests/obj/
 packages
 samples
+captures
+Discovery/Discovery.csproj.user

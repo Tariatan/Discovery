@@ -10,8 +10,7 @@ public sealed class PlayfieldDetectorIntegrationTests
     public void Detect_SampleContainsPlayfield_ReturnsDetectedPlayfield(string sampleFileName)
     {
         // Arrange
-        var projectRoot = ProjectRootLocator.ResolveFromBaseDirectory(AppContext.BaseDirectory);
-        var samplePath = Path.Combine(projectRoot, "samples", sampleFileName);
+        var samplePath = Path.Combine("samples", sampleFileName);
         using var image = Cv2.ImRead(samplePath, ImreadModes.Color);
         var detector = new PlayfieldDetector();
 

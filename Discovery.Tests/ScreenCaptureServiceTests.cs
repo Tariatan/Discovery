@@ -10,19 +10,31 @@ public sealed class ScreenCaptureServiceTests
     {
         // Arrange
         using var workspace = new TemporaryDirectory();
-        var projectRoot = ProjectRootLocator.ResolveFromBaseDirectory(AppContext.BaseDirectory);
-        var samplePath = Path.Combine(projectRoot, "samples", "05.png");
+        var fixtureSamplePath = Path.Combine("samples", "05.png");
+        var samplePath = Path.Combine(workspace.Path, "fixture-05.png");
+        File.Copy(fixtureSamplePath, samplePath);
         var screenCaptureProvider = new StubScreenCaptureProvider(outputPath => File.Copy(samplePath, outputPath));
         var screenCaptureService = new ScreenCaptureService(screenCaptureProvider, new SampleImageProcessor());
+        ScreenCaptureSummary summary;
 
         // Act
-        var summary = screenCaptureService.CaptureAndProcessCurrentScreen(workspace.Path);
+        var currentDirectory = Directory.GetCurrentDirectory();
+        Directory.SetCurrentDirectory(workspace.Path);
+
+        try
+        {
+            summary = screenCaptureService.CaptureAndProcessCurrentScreen();
+        }
+        finally
+        {
+            Directory.SetCurrentDirectory(currentDirectory);
+        }
 
         // Assert
-        Assert.True(File.Exists(summary.CapturePath));
-        Assert.True(File.Exists(summary.Result.OutputPath));
-        Assert.Equal(Path.Combine(workspace.Path, "captures"), summary.CapturesDirectory);
-        Assert.Equal(Path.Combine(workspace.Path, "captures", "output"), summary.OutputDirectory);
+        Assert.True(File.Exists(Path.Combine(workspace.Path, summary.CapturePath)));
+        Assert.True(File.Exists(Path.Combine(workspace.Path, summary.Result.OutputPath)));
+        Assert.Equal("captures", summary.CapturesDirectory);
+        Assert.Equal(Path.Combine("captures", "output"), summary.OutputDirectory);
         Assert.True(summary.Result.PlayfieldFound);
         Assert.True(summary.Result.ClusterCount > 0);
     }
@@ -34,13 +46,24 @@ public sealed class ScreenCaptureServiceTests
         using var workspace = new TemporaryDirectory();
         var screenCaptureProvider = new StubScreenCaptureProvider(CreateBlankCapture);
         var screenCaptureService = new ScreenCaptureService(screenCaptureProvider, new SampleImageProcessor());
+        ScreenCaptureSummary summary;
 
         // Act
-        var summary = screenCaptureService.CaptureAndProcessCurrentScreen(workspace.Path);
+        var currentDirectory = Directory.GetCurrentDirectory();
+        Directory.SetCurrentDirectory(workspace.Path);
+
+        try
+        {
+            summary = screenCaptureService.CaptureAndProcessCurrentScreen();
+        }
+        finally
+        {
+            Directory.SetCurrentDirectory(currentDirectory);
+        }
 
         // Assert
-        Assert.True(File.Exists(summary.CapturePath));
-        Assert.True(File.Exists(summary.Result.OutputPath));
+        Assert.True(File.Exists(Path.Combine(workspace.Path, summary.CapturePath)));
+        Assert.True(File.Exists(Path.Combine(workspace.Path, summary.Result.OutputPath)));
         Assert.False(summary.Result.PlayfieldFound);
         Assert.Equal(0, summary.Result.ClusterCount);
     }

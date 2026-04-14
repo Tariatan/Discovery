@@ -7,11 +7,11 @@ public sealed class SampleProcessingSummaryFormatterTests
     {
         // Arrange
         var summary = new SampleProcessingSummary(
-            @"C:\samples",
-            @"C:\samples\output",
+            @"samples",
+            @"samples\output",
             [
-                new SampleProcessingResult("01.png", true, 2, @"C:\samples\output\01.annotated.png"),
-                new SampleProcessingResult("02.png", false, 0, @"C:\samples\output\02.annotated.png")
+                new SampleProcessingResult("01.png", true, 2, @"samples\output\01.annotated.png"),
+                new SampleProcessingResult("02.png", false, 0, @"samples\output\02.annotated.png")
             ]);
 
         // Act
@@ -19,8 +19,8 @@ public sealed class SampleProcessingSummaryFormatterTests
 
         // Assert
         var lines = text.Split(Environment.NewLine);
-        Assert.Equal("Samples folder: C:\\samples", lines[0]);
-        Assert.Equal("Debug output:  C:\\samples\\output", lines[1]);
+        Assert.Equal("Samples folder: samples", lines[0]);
+        Assert.Equal("Debug output:  samples\\output", lines[1]);
         Assert.Equal(string.Empty, lines[2]);
         Assert.Contains("01.png", lines[3]);
         Assert.Contains("playfield=yes", lines[3]);

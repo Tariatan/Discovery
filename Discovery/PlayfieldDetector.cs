@@ -43,7 +43,7 @@ internal sealed class PlayfieldDetector
 
     public PlayfieldDetector()
     {
-        m_TemplateGray = LoadTemplateFromResources();
+        m_TemplateGray = LoadMarkerFromResources();
         if (m_TemplateGray.Empty())
         {
             throw new InvalidOperationException("Could not load playfield marker template from Properties.Resources.marker.");
@@ -382,7 +382,7 @@ internal sealed class PlayfieldDetector
 
     private static double CenterY(Rect rect) => rect.Y + rect.Height / 2.0;
 
-    private static Mat LoadTemplateFromResources()
+    private static Mat LoadMarkerFromResources()
     {
         using var bitmap = Properties.Resources.marker;
         if (bitmap is null)

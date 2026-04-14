@@ -5,6 +5,8 @@ namespace Discovery;
 
 internal sealed class SampleImageProcessor
 {
+    private const string SamplesFolderName = "samples";
+    private const string OutputFolderName = "output";
     private const int SaturationThreshold = 45;
     private const int BrightnessThreshold = 55;
     private const int BinaryMaskMaxValue = 255;
@@ -40,15 +42,15 @@ internal sealed class SampleImageProcessor
 
     private readonly PlayfieldDetector m_PlayfieldDetector = new();
 
-    public SampleProcessingSummary ProcessSamples(string projectRoot)
+    public SampleProcessingSummary ProcessSamples()
     {
-        var samplesDirectory = Path.Combine(projectRoot, "samples");
+        var samplesDirectory = SamplesFolderName;
         if (!Directory.Exists(samplesDirectory))
         {
             throw new DirectoryNotFoundException($"Samples folder was not found: {samplesDirectory}");
         }
 
-        var outputDirectory = Path.Combine(samplesDirectory, "output");
+        var outputDirectory = Path.Combine(samplesDirectory, OutputFolderName);
         Directory.CreateDirectory(outputDirectory);
 
         var sampleFiles = Directory
@@ -74,6 +76,11 @@ internal sealed class SampleImageProcessor
     }
 
     public SampleProcessingResult ProcessImageFile(string imagePath, string outputDirectory)
+    {
+        return AnalyzeImageFile(imagePath, outputDirectory).Result;
+    }
+
+    internal SampleImageAnalysisResult AnalyzeImageFile(string imagePath, string outputDirectory)
     {
         Directory.CreateDirectory(outputDirectory);
 
@@ -105,11 +112,13 @@ internal sealed class SampleImageProcessor
         var outputPath = Path.Combine(outputDirectory, $"{Path.GetFileNameWithoutExtension(imagePath)}.annotated.png");
         Cv2.ImWrite(outputPath, annotated);
 
-        return new SampleProcessingResult(
+        var result = new SampleProcessingResult(
             Path.GetFileName(imagePath),
             playfieldDetection.IsFound,
             polygons.Count,
             outputPath);
+
+        return new SampleImageAnalysisResult(result, playfieldDetection, polygons);
     }
 
     private static Mat BuildCandidateMask(Mat playfieldImage)
@@ -298,3 +307,8 @@ internal sealed record SampleProcessingResult(
     bool PlayfieldFound,
     int ClusterCount,
     string OutputPath);
+
+internal sealed record SampleImageAnalysisResult(
+    SampleProcessingResult Result,
+    PlayfieldDetectionResult PlayfieldDetection,
+    IReadOnlyList<Point[]> Polygons);
