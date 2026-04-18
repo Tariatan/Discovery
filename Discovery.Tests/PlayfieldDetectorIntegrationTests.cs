@@ -5,13 +5,14 @@ namespace Discovery.Tests;
 public sealed class PlayfieldDetectorIntegrationTests
 {
     [Theory]
-    [InlineData("01.png")]
-    [InlineData("05.png")]
-    public void Detect_SampleContainsPlayfield_ReturnsDetectedPlayfield(string sampleFileName)
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Detect_SyntheticImageContainsPlayfield_ReturnsDetectedPlayfield(bool includeSecondCluster)
     {
         // Arrange
-        var samplePath = Path.Combine("samples", sampleFileName);
-        using var image = Cv2.ImRead(samplePath, ImreadModes.Color);
+        using var image = includeSecondCluster
+            ? SyntheticDiscoveryImageFactory.CreateTwoClusterImage()
+            : SyntheticDiscoveryImageFactory.CreateSingleClusterImage();
         var detector = new PlayfieldDetector();
 
         // Act

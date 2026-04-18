@@ -1,4 +1,5 @@
 using OpenCvSharp;
+using System.IO;
 using System.Runtime.InteropServices;
 
 namespace Discovery;
@@ -9,8 +10,8 @@ internal sealed class AutomationService
     private const int MinimumClickDelayMilliseconds = 300;
     private const int MaximumClickDelayMilliseconds = 800;
     private const int MouseDownDurationMilliseconds = 250;
+    private const int SubmitDelayMilliseconds = 3_500;
     private const int HoverDelayMilliseconds = 200;
-    private const int HoverWigglePixels = 3;
     private static readonly Rect ControlButtonBounds = new(930, 645, 271, 11);
 
     private readonly ScreenCaptureService m_ScreenCaptureService;
@@ -28,28 +29,41 @@ internal sealed class AutomationService
         m_AutomationInputController = automationInputController;
     }
 
-    public AutomationSummary AutomateCurrentScreen(System.Windows.DpiScale dpi)
+    public void ProcessSamples()
     {
-        m_AutomationInputController.Delay(StartupDelayMilliseconds);
-
-        var captureSummary = m_ScreenCaptureService.CaptureAndAnalyzeCurrentScreen();
-        var clickedPointCount = ClickPolygonPoints(captureSummary.Analysis.Polygons);
-
-        m_AutomationInputController.Delay(MinimumClickDelayMilliseconds);
-
-        // Focus the known safe control button area, but leave the actual confirmation
-        // click as an explicit future step.
-        FocusControlButton(ControlButtonBounds, dpi);
-
-        return new AutomationSummary(captureSummary, clickedPointCount, ControlButtonBounds);
+        m_ScreenCaptureService.ProcessSamples();
     }
 
-    private int ClickPolygonPoints(IReadOnlyList<Point[]> polygons)
+    public AutomationSummary AutomateCurrentScreen(System.Windows.DpiScale dpi, CancellationToken cancellationToken)
+    {
+        m_AutomationInputController.Delay(StartupDelayMilliseconds, cancellationToken);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var captureSummary = m_ScreenCaptureService.CaptureAndAnalyzeCurrentScreen();
+        cancellationToken.ThrowIfCancellationRequested();
+        var clickedPointCount = ClickPolygonPoints(captureSummary.Analysis.Polygons, cancellationToken);
+
+        m_AutomationInputController.Delay(MinimumClickDelayMilliseconds, cancellationToken);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        // Focus the known safe control button area.
+        FocusControlButton(ControlButtonBounds, dpi, cancellationToken);
+
+        // Left-click the 'Submit' button.
+        //m_AutomationInputController.LeftClick(cancellationToken);
+        //m_AutomationInputController.Delay(SubmitDelayMilliseconds, cancellationToken);
+        var focusedCapturePath = CaptureFocusedScreenTrace(captureSummary, cancellationToken);
+
+        return new AutomationSummary(captureSummary, clickedPointCount, ControlButtonBounds, focusedCapturePath);
+    }
+
+    private int ClickPolygonPoints(IReadOnlyList<Point[]> polygons, CancellationToken cancellationToken)
     {
         var clickedPointCount = 0;
 
         foreach (var polygon in polygons)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             if (polygon.Length == 0)
             {
                 continue;
@@ -57,30 +71,43 @@ internal sealed class AutomationService
 
             foreach (var point in polygon)
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 m_AutomationInputController.MoveTo(point);
-                m_AutomationInputController.LeftClick();
+                m_AutomationInputController.LeftClick(cancellationToken);
                 clickedPointCount++;
-                m_AutomationInputController.Delay(m_Random.Next(MinimumClickDelayMilliseconds, MaximumClickDelayMilliseconds + 1));
+                m_AutomationInputController.Delay(m_Random.Next(MinimumClickDelayMilliseconds, MaximumClickDelayMilliseconds + 1), cancellationToken);
             }
 
+            cancellationToken.ThrowIfCancellationRequested();
             m_AutomationInputController.MoveTo(polygon[0]);
-            m_AutomationInputController.LeftClick();
+            m_AutomationInputController.LeftClick(cancellationToken);
             clickedPointCount++;
-            m_AutomationInputController.Delay(m_Random.Next(MinimumClickDelayMilliseconds, MaximumClickDelayMilliseconds + 1));
+            m_AutomationInputController.Delay(m_Random.Next(MinimumClickDelayMilliseconds, MaximumClickDelayMilliseconds + 1), cancellationToken);
         }
 
         return clickedPointCount;
     }
 
-    private void FocusControlButton(Rect controlButtonBounds, System.Windows.DpiScale dpi)
+    private void FocusControlButton(Rect controlButtonBounds, System.Windows.DpiScale dpi, CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var anchor = new Point(
             m_Random.Next(controlButtonBounds.X, controlButtonBounds.Right),
             m_Random.Next(controlButtonBounds.Y, controlButtonBounds.Bottom));
         var scaledAnchor = ScalePointForDpi(anchor, dpi);
 
         m_AutomationInputController.MoveTo(scaledAnchor);
-        m_AutomationInputController.Delay(HoverDelayMilliseconds);
+        m_AutomationInputController.Delay(HoverDelayMilliseconds, cancellationToken);
+    }
+
+    private string CaptureFocusedScreenTrace(ScreenCaptureAnalysisSummary captureSummary, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var focusedCapturePath = Path.Combine(
+            captureSummary.CapturesDirectory,
+            $"{Path.GetFileNameWithoutExtension(captureSummary.CapturePath)}.focused.png");
+        m_ScreenCaptureService.CaptureCurrentScreenToFile(focusedCapturePath);
+        return focusedCapturePath;
     }
 
     internal static Point ScalePointForDpi(Point point, System.Windows.DpiScale dpi)
@@ -94,9 +121,9 @@ internal sealed class AutomationService
     {
         void MoveTo(Point point);
 
-        void LeftClick();
+        void LeftClick(CancellationToken cancellationToken);
 
-        void Delay(int milliseconds);
+        void Delay(int milliseconds, CancellationToken cancellationToken);
     }
 
     private sealed class AutomationInputController : IAutomationInputController
@@ -109,18 +136,23 @@ internal sealed class AutomationService
             SetCursorPos(point.X, point.Y);
         }
 
-        public void LeftClick()
+        public void LeftClick(CancellationToken cancellationToken)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             Thread.Sleep(MouseDownDurationMilliseconds);
+            cancellationToken.ThrowIfCancellationRequested();
             mouse_event(LeftDownEvent, 0, 0, 0, UIntPtr.Zero);
             Thread.Sleep(MouseDownDurationMilliseconds);
+            cancellationToken.ThrowIfCancellationRequested();
             mouse_event(LeftUpEvent, 0, 0, 0, UIntPtr.Zero);
             Thread.Sleep(MouseDownDurationMilliseconds);
+            cancellationToken.ThrowIfCancellationRequested();
         }
 
-        public void Delay(int milliseconds)
+        public void Delay(int milliseconds, CancellationToken cancellationToken)
         {
-            Thread.Sleep(milliseconds);
+            cancellationToken.WaitHandle.WaitOne(milliseconds);
+            cancellationToken.ThrowIfCancellationRequested();
         }
 
         [DllImport("user32.dll")]
@@ -134,4 +166,5 @@ internal sealed class AutomationService
 internal sealed record AutomationSummary(
     ScreenCaptureAnalysisSummary CaptureSummary,
     int ClickedPointCount,
-    Rect? ControlButtonBounds);
+    Rect? ControlButtonBounds,
+    string FocusedCapturePath);

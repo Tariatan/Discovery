@@ -9,9 +9,8 @@ public sealed class AutomationServiceTests
     {
         // Arrange
         using var workspace = new TemporaryDirectory();
-        var fixtureCapturePath = Path.Combine("captures", "capture-20260413-215725.png");
         var capturePath = Path.Combine(workspace.Path, "fixture-capture.png");
-        File.Copy(fixtureCapturePath, capturePath);
+        SyntheticDiscoveryImageFactory.WriteTwoClusterImage(capturePath);
         var screenCaptureService = new ScreenCaptureService(
             new StubScreenCaptureProvider(outputPath => File.Copy(capturePath, outputPath)),
             new SampleImageProcessor());
@@ -26,7 +25,7 @@ public sealed class AutomationServiceTests
 
         try
         {
-            summary = automationService.AutomateCurrentScreen(dpi);
+            summary = automationService.AutomateCurrentScreen(dpi, CancellationToken.None);
         }
         finally
         {
@@ -37,11 +36,20 @@ public sealed class AutomationServiceTests
         Assert.True(summary.CaptureSummary.Analysis.Result.PlayfieldFound);
         Assert.True(summary.ClickedPointCount > 0);
         Assert.NotNull(summary.ControlButtonBounds);
+        Assert.Equal("captures", summary.CaptureSummary.CapturesDirectory);
         Assert.Equal(summary.ClickedPointCount + 1, automationInputController.MoveTargets.Count); // + Control button focus
-        Assert.Equal(summary.ClickedPointCount, automationInputController.ClickCount);
+        Assert.InRange(automationInputController.ClickCount, summary.ClickedPointCount, summary.ClickedPointCount + 1);
         var finalMoveTarget = automationInputController.MoveTargets[^1];
         Assert.InRange(finalMoveTarget.X, 930, 1200);
         Assert.InRange(finalMoveTarget.Y, 645, 655);
+        Assert.True(File.Exists(Path.Combine(workspace.Path, summary.CaptureSummary.CapturePath)));
+        Assert.True(File.Exists(Path.Combine(workspace.Path, summary.CaptureSummary.Analysis.Result.OutputPath)));
+        Assert.True(File.Exists(Path.Combine(workspace.Path, summary.FocusedCapturePath)));
+        Assert.Equal(
+            Path.Combine(
+                summary.CaptureSummary.CapturesDirectory,
+                $"{Path.GetFileNameWithoutExtension(summary.CaptureSummary.CapturePath)}.focused.png"),
+            summary.FocusedCapturePath);
     }
 
     [Fact]
@@ -57,6 +65,38 @@ public sealed class AutomationServiceTests
         // Assert
         Assert.Equal(1331, scaledPoint.X);
         Assert.Equal(813, scaledPoint.Y);
+    }
+
+    [Fact]
+    public void AutomateCurrentScreen_CancellationRequested_StopsBeforeAnyClicks()
+    {
+        // Arrange
+        using var workspace = new TemporaryDirectory();
+        var screenCaptureService = new ScreenCaptureService(
+            new StubScreenCaptureProvider(_ => throw new InvalidOperationException("Capture should not run when automation is already canceled.")),
+            new SampleImageProcessor());
+        var automationInputController = new StubAutomationInputController();
+        var automationService = new AutomationService(screenCaptureService, automationInputController);
+        var dpi = new System.Windows.DpiScale(1.0, 1.0);
+        using var cancellationTokenSource = new CancellationTokenSource();
+        cancellationTokenSource.Cancel();
+
+        // Act
+        var currentDirectory = Directory.GetCurrentDirectory();
+        Directory.SetCurrentDirectory(workspace.Path);
+
+        try
+        {
+            Assert.Throws<OperationCanceledException>(() => automationService.AutomateCurrentScreen(dpi, cancellationTokenSource.Token));
+        }
+        finally
+        {
+            Directory.SetCurrentDirectory(currentDirectory);
+        }
+
+        // Assert
+        Assert.Empty(automationInputController.MoveTargets);
+        Assert.Equal(0, automationInputController.ClickCount);
     }
 
     private sealed class StubScreenCaptureProvider(Action<string> captureAction)
@@ -79,13 +119,15 @@ public sealed class AutomationServiceTests
             MoveTargets.Add(point);
         }
 
-        public void LeftClick()
+        public void LeftClick(CancellationToken cancellationToken)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             ClickCount++;
         }
 
-        public void Delay(int milliseconds)
+        public void Delay(int milliseconds, CancellationToken cancellationToken)
         {
+            cancellationToken.ThrowIfCancellationRequested();
         }
     }
 }

@@ -24,7 +24,6 @@ public partial class App
         var summary = processor.ProcessSamples();
 
         Console.WriteLine($"Samples folder: {summary.SamplesDirectory}");
-        Console.WriteLine($"Debug output:  {summary.OutputDirectory}");
 
         foreach (var result in summary.Results)
         {

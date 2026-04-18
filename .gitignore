@@ -8,3 +8,4 @@ packages
 samples
 captures
 Discovery/Discovery.csproj.user
+Discovery/Properties/PublishProfiles/FolderProfile.pubxml.user

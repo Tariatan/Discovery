@@ -5,53 +5,19 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d"
         Title="Discovery"
-        Height="340"
-        Width="760"
-        MinHeight="340"
-        MinWidth="760"
-        Topmost="True">
-    <Grid Margin="20">
-        <Grid.RowDefinitions>
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="*" />
-        </Grid.RowDefinitions>
-
-        <StackPanel>
-            <TextBlock FontSize="22" FontWeight="SemiBold" Text="Discovery" />
-            <TextBlock Margin="0,8,0,0"
-                       Foreground="#FF5E5E5E"
-                       TextWrapping="Wrap"
-                       Text="Process static screenshots from the samples folder or capture the current desktop, then detect the playfield, identify cluster candidates, and write annotated debug images." />
-        </StackPanel>
-
-        <StackPanel Grid.Row="1"
-                    Orientation="Horizontal"
-                    Margin="0,20,0,16">
-            <Button Width="180"
-                    Height="44"
-                    HorizontalAlignment="Left"
-                    Click="Start_Click"
-                    Content="Process Samples" />
-            <Button Width="220"
-                    Height="44"
-                    Margin="12,0,0,0"
-                    HorizontalAlignment="Left"
-                    Click="CaptureScreen_Click"
-                    Content="Capture Current Screen" />
-            <Button Width="160"
-                    Height="44"
-                    Margin="12,0,0,0"
-                    HorizontalAlignment="Left"
-                    Click="Automate_Click"
-                    Content="Automate" />
-        </StackPanel>
-
-        <TextBox x:Name="StatusTextBox"
-                 Grid.Row="2"
-                 IsReadOnly="True"
-                 VerticalScrollBarVisibility="Auto"
-                 TextWrapping="Wrap"
-                 FontFamily="Consolas" />
+        Topmost="True" ResizeMode="NoResize" Height="94" Width="183" WindowStyle="ToolWindow" Background="{DynamicResource {x:Static SystemColors.DesktopBrushKey}}">
+    <Grid Margin="5,5,0,0">
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="129*"/>
+            <ColumnDefinition Width="22*"/>
+        </Grid.ColumnDefinitions>
+        <Button Grid.Column="0"
+                x:Name="StartButton"
+                Click="Automate_Click"
+                Content="Start" Background="#FF2CB43A" FontWeight="Bold" Margin="2,10,10,10" Grid.ColumnSpan="2" />
+        <Button Grid.Column="1"
+                x:Name="SamplesButton"
+                Click="Samples_Click"
+                Content="+" Background="#FF7F2CB4" FontWeight="Bold" Margin="2,10,10,10" />
     </Grid>
 </Window>

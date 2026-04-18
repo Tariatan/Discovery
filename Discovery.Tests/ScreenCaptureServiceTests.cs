@@ -1,5 +1,4 @@
-using System.Drawing;
-using System.Drawing.Imaging;
+using OpenCvSharp;
 
 namespace Discovery.Tests;
 
@@ -10,9 +9,8 @@ public sealed class ScreenCaptureServiceTests
     {
         // Arrange
         using var workspace = new TemporaryDirectory();
-        var fixtureSamplePath = Path.Combine("samples", "05.png");
         var samplePath = Path.Combine(workspace.Path, "fixture-05.png");
-        File.Copy(fixtureSamplePath, samplePath);
+        SyntheticDiscoveryImageFactory.WriteTwoClusterImage(samplePath);
         var screenCaptureProvider = new StubScreenCaptureProvider(outputPath => File.Copy(samplePath, outputPath));
         var screenCaptureService = new ScreenCaptureService(screenCaptureProvider, new SampleImageProcessor());
         ScreenCaptureSummary summary;
@@ -34,7 +32,7 @@ public sealed class ScreenCaptureServiceTests
         Assert.True(File.Exists(Path.Combine(workspace.Path, summary.CapturePath)));
         Assert.True(File.Exists(Path.Combine(workspace.Path, summary.Result.OutputPath)));
         Assert.Equal("captures", summary.CapturesDirectory);
-        Assert.Equal(Path.Combine("captures", "output"), summary.OutputDirectory);
+        Assert.Equal(Path.Combine("captures", Path.GetFileNameWithoutExtension(summary.CapturePath) + ".annotated.png"), summary.Result.OutputPath);
         Assert.True(summary.Result.PlayfieldFound);
         Assert.True(summary.Result.ClusterCount > 0);
     }
@@ -70,10 +68,8 @@ public sealed class ScreenCaptureServiceTests
 
     private static void CreateBlankCapture(string outputPath)
     {
-        using var bitmap = new Bitmap(1200, 900);
-        using var graphics = Graphics.FromImage(bitmap);
-        graphics.Clear(Color.Black);
-        bitmap.Save(outputPath, ImageFormat.Png);
+        using var image = new Mat(new OpenCvSharp.Size(1200, 900), MatType.CV_8UC3, Scalar.All(0));
+        Cv2.ImWrite(outputPath, image);
     }
 
     private sealed class StubScreenCaptureProvider : ScreenCaptureService.IScreenCaptureProvider
