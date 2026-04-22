@@ -2,8 +2,11 @@
 .dotnet/
 Discovery/bin/
 Discovery/obj/
+Discovery/Hallmark
 Discovery.Tests/bin/
 Discovery.Tests/obj/
+Discovery.Tuning/bin/
+Discovery.Tuning/obj/
 packages
 samples
 captures

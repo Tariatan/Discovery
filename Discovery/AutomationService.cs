@@ -6,7 +6,7 @@ namespace Discovery;
 
 internal sealed class AutomationService
 {
-    private const int StartupDelayMilliseconds = 1_000;
+    private const int StartupDelayMilliseconds = 3_000;
     private const int MinimumClickDelayMilliseconds = 300;
     private const int MaximumClickDelayMilliseconds = 800;
     private const int MouseDownDurationMilliseconds = 250;

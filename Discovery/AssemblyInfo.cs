@@ -10,3 +10,4 @@ using System.Runtime.CompilerServices;
                                                 // app, or any theme specific resource dictionaries)
 )]
 [assembly: InternalsVisibleTo("Discovery.Tests")]
+[assembly: InternalsVisibleTo("Discovery.Tuning")]
