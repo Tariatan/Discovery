@@ -56,7 +56,7 @@ public sealed class SampleImageProcessorTests
         var result = Assert.Single(summary.Results);
         Assert.Equal("01.png", result.FileName);
         Assert.False(result.PlayfieldFound);
-        Assert.Equal(0, result.ClusterCount);
+        Assert.Equal(2, result.ClusterCount);
         Assert.True(File.Exists(Path.Combine(workspace.Path, result.OutputPath)));
     }
 
@@ -95,8 +95,38 @@ public sealed class SampleImageProcessorTests
 
         var blankResult = Assert.Single(summary.Results, result => result.FileName == "99.png");
         Assert.False(blankResult.PlayfieldFound);
-        Assert.Equal(0, blankResult.ClusterCount);
+        Assert.Equal(2, blankResult.ClusterCount);
         Assert.True(File.Exists(Path.Combine(workspace.Path, blankResult.OutputPath)));
+    }
+
+    [Fact]
+    public void AnalyzeImageFile_PlayfieldNotFound_UsesFallbackPolygons()
+    {
+        // Arrange
+        using var workspace = new TemporaryDirectory();
+        var imagePath = Path.Combine(workspace.Path, "blank.png");
+        CreateSolidImage(imagePath, 1200, 900);
+        var processor = new SampleImageProcessor();
+        SampleImageAnalysisResult analysis;
+
+        // Act
+        var currentDirectory = Directory.GetCurrentDirectory();
+        Directory.SetCurrentDirectory(workspace.Path);
+
+        try
+        {
+            analysis = processor.AnalyzeImageFile(imagePath);
+        }
+        finally
+        {
+            Directory.SetCurrentDirectory(currentDirectory);
+        }
+
+        // Assert
+        Assert.False(analysis.PlayfieldDetection.IsFound);
+        Assert.Equal(2, analysis.Polygons.Count);
+        Assert.Equal(2, analysis.Result.ClusterCount);
+        Assert.True(File.Exists(Path.Combine(workspace.Path, analysis.Result.OutputPath)));
     }
 
     [Fact]
@@ -344,7 +374,7 @@ public sealed class SampleImageProcessorTests
     }
 
     [Fact]
-    public void RandomizePolygons_PolygonExists_MovesFortyPercentOfPointsWithinDistanceRange()
+    public void RandomizePolygons_PolygonExists_MovesConfiguredPointsWithinDistanceRange()
     {
         // Arrange
         var polygons = new List<OpenCvSharp.Point[]>
@@ -374,8 +404,8 @@ public sealed class SampleImageProcessorTests
             .Where(distance => distance > 0.0)
             .ToArray();
 
-        Assert.Equal(2, movedDistances.Length);
-        Assert.All(movedDistances, distance => Assert.InRange(distance, 5.0, 15.5));
+        Assert.Equal(5, movedDistances.Length);
+        Assert.All(movedDistances, distance => Assert.InRange(distance, 10.0, 35.5));
     }
 
     [Fact]
@@ -424,6 +454,58 @@ public sealed class SampleImageProcessorTests
                 Assert.True(bounds.Right <= 331);
                 Assert.True(bounds.Bottom <= 531);
             });
+    }
+
+    [Fact]
+    public void NormalizePolygon_PolygonCurvesInward_RemovesInwardVertices()
+    {
+        // Arrange
+        var polygon = new[]
+        {
+            new OpenCvSharp.Point(10, 10),
+            new OpenCvSharp.Point(50, 10),
+            new OpenCvSharp.Point(32, 24),
+            new OpenCvSharp.Point(50, 50),
+            new OpenCvSharp.Point(10, 50)
+        };
+
+        // Act
+        var normalizedPolygon = SampleImageProcessor.NormalizePolygon(polygon);
+
+        // Assert
+        Assert.True(Cv2.IsContourConvex(normalizedPolygon));
+        Assert.True(normalizedPolygon.Length < polygon.Length);
+        Assert.DoesNotContain(normalizedPolygon, point => point == new OpenCvSharp.Point(32, 24));
+    }
+
+    [Fact]
+    public void NormalizePolygons_AfterSpacingDistortsPolygon_RestoresOutwardOnlyContour()
+    {
+        // Arrange
+        var polygons = new List<OpenCvSharp.Point[]>
+        {
+            new[]
+            {
+                new OpenCvSharp.Point(20, 20),
+                new OpenCvSharp.Point(70, 20),
+                new OpenCvSharp.Point(70, 70),
+                new OpenCvSharp.Point(20, 70)
+            },
+            new[]
+            {
+                new OpenCvSharp.Point(78, 24),
+                new OpenCvSharp.Point(118, 24),
+                new OpenCvSharp.Point(118, 66),
+                new OpenCvSharp.Point(78, 66)
+            }
+        };
+
+        // Act
+        SampleImageProcessor.EnsureMinimumPointSpacing(polygons);
+        SampleImageProcessor.NormalizePolygons(polygons);
+
+        // Assert
+        Assert.All(polygons, polygon => Assert.True(Cv2.IsContourConvex(polygon)));
     }
 
     [Fact]

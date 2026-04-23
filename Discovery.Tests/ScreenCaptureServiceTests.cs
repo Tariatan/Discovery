@@ -38,7 +38,7 @@ public sealed class ScreenCaptureServiceTests
     }
 
     [Fact]
-    public void CaptureAndProcessCurrentScreen_CaptureProviderCreatesBlankImage_ReturnsNotFoundSummary()
+    public void CaptureAndProcessCurrentScreen_CaptureProviderCreatesBlankImage_ReturnsFallbackSummary()
     {
         // Arrange
         using var workspace = new TemporaryDirectory();
@@ -63,7 +63,7 @@ public sealed class ScreenCaptureServiceTests
         Assert.True(File.Exists(Path.Combine(workspace.Path, summary.CapturePath)));
         Assert.True(File.Exists(Path.Combine(workspace.Path, summary.Result.OutputPath)));
         Assert.False(summary.Result.PlayfieldFound);
-        Assert.Equal(0, summary.Result.ClusterCount);
+        Assert.Equal(2, summary.Result.ClusterCount);
     }
 
     private static void CreateBlankCapture(string outputPath)

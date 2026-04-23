@@ -6,6 +6,10 @@ namespace Discovery;
 internal sealed class SampleImageProcessor
 {
     private const string SamplesFolderName = "samples";
+    private const double FallbackPlayfieldLeftRatio = 0.11;
+    private const double FallbackPlayfieldTopRatio = 0.24;
+    private const double FallbackPlayfieldWidthRatio = 0.40;
+    private const double FallbackPlayfieldHeightRatio = 0.52;
     private const int SaturationThreshold = 45;
     private const int BrightnessThreshold = 55;
     private const int BinaryMaskMaxValue = 255;
@@ -188,10 +192,16 @@ internal sealed class SampleImageProcessor
 
             var mutablePolygons = polygons.ToList();
             RandomizePolygons(mutablePolygons);
+            NormalizePolygons(mutablePolygons);
             mutablePolygons = ApplyMarkerBoundaryConstraints(mutablePolygons, playfieldDetection.MarkerBounds).ToList();
             ResolvePolygonCollisions(mutablePolygons);
             EnsureMinimumPointSpacing(mutablePolygons);
+            NormalizePolygons(mutablePolygons);
             polygons = ApplyMarkerBoundaryConstraints(mutablePolygons, playfieldDetection.MarkerBounds);
+        }
+        else
+        {
+            polygons = BuildFallbackPolygons(BuildFallbackPlayfieldBounds(image.Size()));
         }
 
         DrawDebugOverlay(annotated, playfieldDetection, polygons);
@@ -1450,6 +1460,24 @@ internal sealed class SampleImageProcessor
         }
     }
 
+    internal static void NormalizePolygons(IList<Point[]> polygons)
+    {
+        for (var polygonIndex = 0; polygonIndex < polygons.Count; polygonIndex++)
+        {
+            polygons[polygonIndex] = NormalizePolygon(polygons[polygonIndex]);
+        }
+    }
+
+    internal static Point[] NormalizePolygon(Point[] polygon)
+    {
+        if (polygon.Length < 3 || Cv2.IsContourConvex(polygon))
+        {
+            return polygon;
+        }
+
+        return Cv2.ConvexHull(polygon);
+    }
+
     private static Point[] ClipPolygonWithHorizontalBoundary(
         Point[] polygon,
         Func<Point, bool> isInside,
@@ -1457,7 +1485,7 @@ internal sealed class SampleImageProcessor
     {
         if (polygon.Length < 3)
         {
-            return Array.Empty<Point>();
+            return [];
         }
 
         var clipped = new List<Point>();
@@ -1514,7 +1542,7 @@ internal sealed class SampleImageProcessor
     {
         if (polygon.Length < 3)
         {
-            return Array.Empty<Point>();
+            return [];
         }
 
         var clipped = new List<Point>();
@@ -1954,38 +1982,6 @@ internal sealed class SampleImageProcessor
         return foundViolation;
     }
 
-    private static bool TryFindClosestPointPair(
-        IReadOnlyList<Point> firstPolygon,
-        IReadOnlyList<Point> secondPolygon,
-        out int firstPointIndex,
-        out int secondPointIndex,
-        out double distance)
-    {
-        firstPointIndex = -1;
-        secondPointIndex = -1;
-        distance = double.MaxValue;
-
-        for (var firstIndex = 0; firstIndex < firstPolygon.Count; firstIndex++)
-        {
-            for (var secondIndex = 0; secondIndex < secondPolygon.Count; secondIndex++)
-            {
-                var dx = firstPolygon[firstIndex].X - secondPolygon[secondIndex].X;
-                var dy = firstPolygon[firstIndex].Y - secondPolygon[secondIndex].Y;
-                var currentDistance = Math.Sqrt((dx * dx) + (dy * dy));
-                if (currentDistance >= distance)
-                {
-                    continue;
-                }
-
-                distance = currentDistance;
-                firstPointIndex = firstIndex;
-                secondPointIndex = secondIndex;
-            }
-        }
-
-        return firstPointIndex >= 0 && secondPointIndex >= 0;
-    }
-
     private static Point2d FindClosestPointOnSegment(Point point, Point segmentStart, Point segmentEnd)
     {
         var dx = segmentEnd.X - segmentStart.X;
@@ -2248,6 +2244,21 @@ internal sealed class SampleImageProcessor
             y + (int)Math.Round(h * py));
     }
 
+    private static Rect BuildFallbackPlayfieldBounds(Size imageSize)
+    {
+        var left = (int)Math.Round(imageSize.Width * FallbackPlayfieldLeftRatio);
+        var top = (int)Math.Round(imageSize.Height * FallbackPlayfieldTopRatio);
+        var width = (int)Math.Round(imageSize.Width * FallbackPlayfieldWidthRatio);
+        var height = (int)Math.Round(imageSize.Height * FallbackPlayfieldHeightRatio);
+
+        left = Math.Clamp(left, 0, Math.Max(0, imageSize.Width - 1));
+        top = Math.Clamp(top, 0, Math.Max(0, imageSize.Height - 1));
+        width = Math.Clamp(width, 1, Math.Max(1, imageSize.Width - left));
+        height = Math.Clamp(height, 1, Math.Max(1, imageSize.Height - top));
+
+        return new Rect(left, top, width, height);
+    }
+
     private static void DrawDebugOverlay(Mat annotated, PlayfieldDetectionResult playfieldDetection, IReadOnlyList<Point[]> polygons)
     {
         // Draw the recovered playfield and cluster outlines back onto the original
@@ -2277,7 +2288,9 @@ internal sealed class SampleImageProcessor
             annotated,
             playfieldDetection.IsFound
                 ? $"Playfield found, clusters: {polygons.Count}"
-                : "Playfield not found",
+                : polygons.Count > 0
+                    ? $"Playfield not found, using fallback: {polygons.Count}"
+                    : "Playfield not found",
             new Point(
                 playfieldDetection.IsFound ? playfieldDetection.Bounds.X : OverlayLeftPadding,
                 playfieldDetection.IsFound ? Math.Max(OverlayMinimumLabelY, playfieldDetection.Bounds.Y - OverlayLabelYOffset) : OverlayTopPadding),
