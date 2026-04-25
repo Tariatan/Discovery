@@ -192,12 +192,8 @@ internal sealed class SampleImageProcessor
 
             var mutablePolygons = polygons.ToList();
             RandomizePolygons(mutablePolygons);
-            NormalizePolygons(mutablePolygons);
-            mutablePolygons = ApplyMarkerBoundaryConstraints(mutablePolygons, playfieldDetection.MarkerBounds).ToList();
-            ResolvePolygonCollisions(mutablePolygons);
-            EnsureMinimumPointSpacing(mutablePolygons);
-            NormalizePolygons(mutablePolygons);
-            polygons = ApplyMarkerBoundaryConstraints(mutablePolygons, playfieldDetection.MarkerBounds);
+            FinalizeDetectedPolygons(mutablePolygons, playfieldDetection.MarkerBounds);
+            polygons = mutablePolygons.ToArray();
         }
         else
         {
@@ -1460,6 +1456,20 @@ internal sealed class SampleImageProcessor
         }
     }
 
+    internal static void FinalizeDetectedPolygons(IList<Point[]> polygons, IReadOnlyList<Rect> markerBounds)
+    {
+        NormalizePolygons(polygons);
+        OverwritePolygons(polygons, ApplyMarkerBoundaryConstraints(polygons.ToArray(), markerBounds));
+        ResolvePolygonCollisions(polygons);
+        EnsureMinimumPointSpacing(polygons);
+        NormalizePolygons(polygons);
+        OverwritePolygons(polygons, ApplyMarkerBoundaryConstraints(polygons.ToArray(), markerBounds));
+        ResolvePolygonCollisions(polygons);
+        EnsureMinimumPointSpacing(polygons);
+        NormalizePolygons(polygons);
+        OverwritePolygons(polygons, ApplyMarkerBoundaryConstraints(polygons.ToArray(), markerBounds));
+    }
+
     internal static void NormalizePolygons(IList<Point[]> polygons)
     {
         for (var polygonIndex = 0; polygonIndex < polygons.Count; polygonIndex++)
@@ -1476,6 +1486,16 @@ internal sealed class SampleImageProcessor
         }
 
         return Cv2.ConvexHull(polygon);
+    }
+
+    private static void OverwritePolygons(IList<Point[]> target, IReadOnlyList<Point[]> source)
+    {
+        target.Clear();
+
+        foreach (var polygon in source)
+        {
+            target.Add(polygon);
+        }
     }
 
     private static Point[] ClipPolygonWithHorizontalBoundary(

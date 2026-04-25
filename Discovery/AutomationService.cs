@@ -210,10 +210,22 @@ internal sealed class AutomationService
             cancellationToken.ThrowIfCancellationRequested();
             Thread.Sleep(MouseDownDurationMilliseconds);
             cancellationToken.ThrowIfCancellationRequested();
-            mouse_event(LeftDownEvent, 0, 0, 0, UIntPtr.Zero);
-            Thread.Sleep(MouseDownDurationMilliseconds);
-            cancellationToken.ThrowIfCancellationRequested();
-            mouse_event(LeftUpEvent, 0, 0, 0, UIntPtr.Zero);
+            var leftButtonPressed = false;
+
+            try
+            {
+                mouse_event(LeftDownEvent, 0, 0, 0, UIntPtr.Zero);
+                leftButtonPressed = true;
+                Thread.Sleep(MouseDownDurationMilliseconds);
+            }
+            finally
+            {
+                if (leftButtonPressed)
+                {
+                    mouse_event(LeftUpEvent, 0, 0, 0, UIntPtr.Zero);
+                }
+            }
+
             Thread.Sleep(MouseDownDurationMilliseconds);
             cancellationToken.ThrowIfCancellationRequested();
         }

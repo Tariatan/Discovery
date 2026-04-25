@@ -23,7 +23,7 @@ public sealed class AutomationServiceTests
             OnDelayAdvanceClock = milliseconds => automationClock.AdvanceBy(milliseconds),
             OnDelay = milliseconds =>
             {
-                if (milliseconds == 5_000)
+                if (milliseconds == 4_000)
                 {
                     sawAfterSubmitDelay = true;
                     return;
@@ -100,7 +100,7 @@ public sealed class AutomationServiceTests
             OnDelayAdvanceClock = milliseconds => automationClock.AdvanceBy(milliseconds),
             OnDelay = milliseconds =>
             {
-                if (milliseconds == 5_000)
+                if (milliseconds == 4_000)
                 {
                     sawAfterSubmitDelay = true;
                     return;
@@ -193,7 +193,7 @@ public sealed class AutomationServiceTests
         // Arrange
         using var workspace = new TemporaryDirectory();
         var capturePath = Path.Combine(workspace.Path, "fixture-capture.png");
-        CreateSolidImage(capturePath, 900, 900);
+        SyntheticDiscoveryImageFactory.WriteSingleClusterImage(capturePath);
         var captureInvocationCount = 0;
         var screenCaptureService = new ScreenCaptureService(
             new StubScreenCaptureProvider(outputPath =>
@@ -211,12 +211,12 @@ public sealed class AutomationServiceTests
             OnDelayAdvanceClock = milliseconds => automationClock.AdvanceBy(milliseconds),
             OnDelay = milliseconds =>
             {
-                if (milliseconds > 5_000)
+                if (milliseconds > 4_000)
                 {
                     observedLongRateLimitDelay = true;
                 }
 
-                if (milliseconds == 5_000)
+                if (milliseconds == 4_000)
                 {
                     afterSubmitDelayCount++;
                     if (afterSubmitDelayCount >= 5)

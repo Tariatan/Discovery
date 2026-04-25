@@ -826,6 +826,46 @@ public sealed class SampleImageProcessorTests
     }
 
     [Fact]
+    public void FinalizeDetectedPolygons_FinalConstraintWouldReintroduceCollision_SeparatesPolygonsAgain()
+    {
+        // Arrange
+        var polygons = new List<OpenCvSharp.Point[]>
+        {
+            new[]
+            {
+                new OpenCvSharp.Point(240, 120),
+                new OpenCvSharp.Point(311, 112),
+                new OpenCvSharp.Point(320, 250),
+                new OpenCvSharp.Point(255, 255)
+            },
+            new[]
+            {
+                new OpenCvSharp.Point(300, 125),
+                new OpenCvSharp.Point(356, 118),
+                new OpenCvSharp.Point(352, 248),
+                new OpenCvSharp.Point(302, 256)
+            }
+        };
+        var markers = new[]
+        {
+            new Rect(100, 100, 30, 30),
+            new Rect(300, 100, 30, 30),
+            new Rect(100, 500, 30, 30),
+            new Rect(300, 500, 30, 30)
+        };
+
+        // Act
+        SampleImageProcessor.FinalizeDetectedPolygons(polygons, markers);
+
+        // Assert
+        using var firstInput = OpenCvSharp.InputArray.Create(polygons[0]);
+        using var secondInput = OpenCvSharp.InputArray.Create(polygons[1]);
+        using var overlapPolygon = new OpenCvSharp.Mat();
+        var overlapArea = Cv2.IntersectConvexConvex(firstInput, secondInput, overlapPolygon, true);
+        Assert.True(overlapArea <= 1.0);
+    }
+
+    [Fact]
     public void EnforceMinimumPolygonFootprint_PolygonIsTooSmall_ExpandsBoundsToMinimumSize()
     {
         // Arrange
