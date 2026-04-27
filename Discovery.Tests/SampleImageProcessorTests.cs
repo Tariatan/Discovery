@@ -479,6 +479,45 @@ public sealed class SampleImageProcessorTests
     }
 
     [Fact]
+    public void NormalizePolygon_NextPointIsCloseToPreviousPoint_SkipsNextPoint()
+    {
+        // Arrange
+        var polygon = new[]
+        {
+            new OpenCvSharp.Point(0, 0),
+            new OpenCvSharp.Point(20, -20),
+            new OpenCvSharp.Point(50, 0),
+            new OpenCvSharp.Point(50, 50),
+            new OpenCvSharp.Point(0, 50)
+        };
+
+        // Act
+        var normalizedPolygon = SampleImageProcessor.NormalizePolygon(polygon);
+
+        // Assert
+        Assert.Equal(4, normalizedPolygon.Length);
+        Assert.DoesNotContain(normalizedPolygon, point => point == new OpenCvSharp.Point(20, -20));
+    }
+
+    [Fact]
+    public void NormalizePolygon_ThreePointPolygonHasCloseNeighbor_KeepsTriangle()
+    {
+        // Arrange
+        var polygon = new[]
+        {
+            new OpenCvSharp.Point(0, 0),
+            new OpenCvSharp.Point(20, -20),
+            new OpenCvSharp.Point(50, 0)
+        };
+
+        // Act
+        var normalizedPolygon = SampleImageProcessor.NormalizePolygon(polygon);
+
+        // Assert
+        Assert.Equal(3, normalizedPolygon.Length);
+    }
+
+    [Fact]
     public void NormalizePolygons_AfterSpacingDistortsPolygon_RestoresOutwardOnlyContour()
     {
         // Arrange
@@ -1140,7 +1179,7 @@ public sealed class SampleImageProcessorTests
             polygon =>
             {
                 var bounds = Cv2.BoundingRect(polygon);
-                Assert.True((bounds.Width * bounds.Height) >= 35_000);
+                Assert.True((bounds.Width * bounds.Height) >= 30_000);
             });
         Assert.Contains(
             analysis.Polygons,

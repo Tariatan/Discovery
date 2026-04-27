@@ -7,8 +7,8 @@ namespace Discovery;
 internal sealed class AutomationService
 {
     private const int StartupDelayMilliseconds = 3_000;
-    private const int MaximumCyclesPerMinute = 5;
-    private const int CycleWindowMilliseconds = 60_000;
+    private const int MaximumSubmissionsPerWindow = 5;
+    private const int SubmissionWindowMilliseconds = 70_000;
     private const int MinimumClickDelayMilliseconds = 300;
     private const int MaximumClickDelayMilliseconds = 800;
     private const int MouseDownDurationMilliseconds = 250;
@@ -19,6 +19,7 @@ internal sealed class AutomationService
     private readonly ScreenCaptureService m_ScreenCaptureService;
     private readonly IAutomationInputController m_AutomationInputController;
     private readonly IAutomationClock m_AutomationClock;
+    private readonly MaximumSubmissionsPopupDetector m_MaximumSubmissionsPopupDetector;
     private readonly Random m_Random = new();
 
     public AutomationService()
@@ -39,6 +40,7 @@ internal sealed class AutomationService
         m_ScreenCaptureService = screenCaptureService;
         m_AutomationInputController = automationInputController;
         m_AutomationClock = automationClock;
+        m_MaximumSubmissionsPopupDetector = new MaximumSubmissionsPopupDetector();
     }
 
     public void ProcessSamples()
@@ -52,15 +54,18 @@ internal sealed class AutomationService
         cancellationToken.ThrowIfCancellationRequested();
 
         AutomationSummary? lastSummary = null;
-        var rateLimiter = new AutomationCycleRateLimiter(m_AutomationClock.UtcNow);
+        var rateLimiter = new AutomationSubmitRateLimiter();
 
         try
         {
             while (!cancellationToken.IsCancellationRequested)
             {
-                rateLimiter.ResetWindowIfExpired(m_AutomationClock.UtcNow);
                 lastSummary = AutomateSingleCycle(dpi, rateLimiter, cancellationToken);
-                rateLimiter.RecordCompletedCycle(m_AutomationClock.UtcNow);
+                if (lastSummary.MaximumSubmissionsReached)
+                {
+                    return lastSummary;
+                }
+
                 m_AutomationInputController.Delay(MinimumClickDelayMilliseconds, cancellationToken);
             }
         }
@@ -74,7 +79,7 @@ internal sealed class AutomationService
 
     private AutomationSummary AutomateSingleCycle(
         System.Windows.DpiScale dpi,
-        AutomationCycleRateLimiter rateLimiter,
+        AutomationSubmitRateLimiter rateLimiter,
         CancellationToken cancellationToken)
     {
         var captureSummary = m_ScreenCaptureService.CaptureAndAnalyzeCurrentScreen();
@@ -91,8 +96,18 @@ internal sealed class AutomationService
 
         // Left-click the 'Submit' button.
         m_AutomationInputController.LeftClick(cancellationToken);
+        rateLimiter.RecordSubmit(m_AutomationClock.UtcNow);
         m_AutomationInputController.Delay(AfterSubmitDelayMilliseconds, cancellationToken);
         var focusedCapturePath = CaptureFocusedScreenTrace(captureSummary, cancellationToken);
+        if (m_MaximumSubmissionsPopupDetector.DetectAndDrawDebugOverlay(focusedCapturePath))
+        {
+            return new AutomationSummary(
+                captureSummary,
+                clickedPointCount,
+                ControlButtonBounds,
+                focusedCapturePath,
+                MaximumSubmissionsReached: true);
+        }
 
         // Left-click the 'Continue' button.
         m_AutomationInputController.LeftClick(cancellationToken);
@@ -104,21 +119,15 @@ internal sealed class AutomationService
         return new AutomationSummary(captureSummary, clickedPointCount, ControlButtonBounds, focusedCapturePath);
     }
 
-    private void DelayBeforeRateLimitedSubmit(AutomationCycleRateLimiter rateLimiter, CancellationToken cancellationToken)
+    private void DelayBeforeRateLimitedSubmit(AutomationSubmitRateLimiter rateLimiter, CancellationToken cancellationToken)
     {
-        if (!rateLimiter.IsSubmitOfFifthCycle)
+        var delay = rateLimiter.GetDelayBeforeNextSubmit(m_AutomationClock.UtcNow);
+        if (delay <= TimeSpan.Zero)
         {
             return;
         }
 
-        var elapsed = m_AutomationClock.UtcNow - rateLimiter.WindowStartedAtUtc;
-        var remaining = TimeSpan.FromMilliseconds(CycleWindowMilliseconds) - elapsed;
-        if (remaining <= TimeSpan.Zero)
-        {
-            return;
-        }
-
-        m_AutomationInputController.Delay((int)Math.Ceiling(remaining.TotalMilliseconds), cancellationToken);
+        m_AutomationInputController.Delay((int)Math.Ceiling(delay.TotalMilliseconds), cancellationToken);
     }
 
     private int ClickPolygonPoints(IReadOnlyList<Point[]> polygons, CancellationToken cancellationToken)
@@ -248,31 +257,35 @@ internal sealed class AutomationService
         public DateTime UtcNow => DateTime.UtcNow;
     }
 
-    private sealed class AutomationCycleRateLimiter(DateTime windowStartedAtUtc)
+    private sealed class AutomationSubmitRateLimiter
     {
-        public DateTime WindowStartedAtUtc { get; private set; } = windowStartedAtUtc;
+        private readonly Queue<DateTime> m_SubmittedAtUtc = new();
 
-        public int CompletedCyclesInWindow { get; private set; }
-
-        public bool IsSubmitOfFifthCycle => CompletedCyclesInWindow == MaximumCyclesPerMinute - 1;
-
-        public void ResetWindowIfExpired(DateTime utcNow)
+        public TimeSpan GetDelayBeforeNextSubmit(DateTime utcNow)
         {
-            if (CompletedCyclesInWindow >= MaximumCyclesPerMinute ||
-                (utcNow - WindowStartedAtUtc).TotalMilliseconds >= CycleWindowMilliseconds)
+            RemoveExpiredSubmissions(utcNow);
+            if (m_SubmittedAtUtc.Count < MaximumSubmissionsPerWindow)
             {
-                WindowStartedAtUtc = utcNow;
-                CompletedCyclesInWindow = 0;
+                return TimeSpan.Zero;
             }
+
+            var elapsed = utcNow - m_SubmittedAtUtc.Peek();
+            var remaining = TimeSpan.FromMilliseconds(SubmissionWindowMilliseconds) - elapsed;
+            return remaining <= TimeSpan.Zero ? TimeSpan.Zero : remaining;
         }
 
-        public void RecordCompletedCycle(DateTime utcNow)
+        public void RecordSubmit(DateTime utcNow)
         {
-            CompletedCyclesInWindow++;
-            if (CompletedCyclesInWindow >= MaximumCyclesPerMinute)
+            RemoveExpiredSubmissions(utcNow);
+            m_SubmittedAtUtc.Enqueue(utcNow);
+        }
+
+        private void RemoveExpiredSubmissions(DateTime utcNow)
+        {
+            while (m_SubmittedAtUtc.Count > 0 &&
+                   (utcNow - m_SubmittedAtUtc.Peek()).TotalMilliseconds >= SubmissionWindowMilliseconds)
             {
-                WindowStartedAtUtc = utcNow;
-                CompletedCyclesInWindow = 0;
+                m_SubmittedAtUtc.Dequeue();
             }
         }
     }
@@ -282,4 +295,5 @@ internal sealed record AutomationSummary(
     ScreenCaptureAnalysisSummary CaptureSummary,
     int ClickedPointCount,
     Rect? ControlButtonBounds,
-    string FocusedCapturePath);
+    string FocusedCapturePath,
+    bool MaximumSubmissionsReached = false);

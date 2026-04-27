@@ -48,6 +48,13 @@ internal static class SyntheticDiscoveryImageFactory
             new ClusterDefinition(new OpenCvSharp.Point(560, 540), new OpenCvSharp.Size(58, 90), new Scalar(255, 200, 40)));
     }
 
+    public static Mat CreateMaximumSubmissionsPopupImage()
+    {
+        var image = new Mat(new OpenCvSharp.Size(1701, 1345), MatType.CV_8UC3, new Scalar(22, 28, 30));
+        DrawMaximumSubmissionsPopup(image);
+        return image;
+    }
+
     public static void WriteSingleClusterImage(string outputPath)
     {
         using var image = CreateSingleClusterImage();
@@ -75,6 +82,12 @@ internal static class SyntheticDiscoveryImageFactory
     public static void WriteMultiSizeClusterImage(string outputPath)
     {
         using var image = CreateMultiSizeClusterImage();
+        Cv2.ImWrite(outputPath, image);
+    }
+
+    public static void WriteMaximumSubmissionsPopupImage(string outputPath)
+    {
+        using var image = CreateMaximumSubmissionsPopupImage();
         Cv2.ImWrite(outputPath, image);
     }
 
@@ -145,6 +158,60 @@ internal static class SyntheticDiscoveryImageFactory
                 Math.Clamp(y, 0, image.Height - 1));
             Cv2.Circle(image, point, 1, color, -1, LineTypes.AntiAlias);
         }
+    }
+
+    private static void DrawMaximumSubmissionsPopup(Mat image)
+    {
+        var popup = new Rect(
+            (int)Math.Round(image.Width * 0.56),
+            (int)Math.Round(image.Height * 0.62),
+            (int)Math.Round(image.Width * 0.36),
+            (int)Math.Round(image.Height * 0.29));
+        Cv2.Rectangle(image, popup, new Scalar(7, 7, 7), -1);
+        Cv2.Rectangle(image, popup, new Scalar(75, 65, 45), 1);
+
+        var iconCenter = new OpenCvSharp.Point(
+            popup.X + (int)Math.Round(popup.Width * 0.10),
+            popup.Y + (int)Math.Round(popup.Height * 0.16));
+        Cv2.Circle(image, iconCenter, 23, new Scalar(235, 235, 235), -1, LineTypes.AntiAlias);
+        Cv2.PutText(
+            image,
+            "i",
+            new OpenCvSharp.Point(iconCenter.X - 5, iconCenter.Y + 11),
+            HersheyFonts.HersheyDuplex,
+            1.0,
+            new Scalar(30, 30, 30),
+            2,
+            LineTypes.AntiAlias);
+
+        var titleLeft = popup.X + (int)Math.Round(popup.Width * 0.20);
+        var titleTop = popup.Y + (int)Math.Round(popup.Height * 0.12);
+        Cv2.PutText(image, "Maximum Number of", new OpenCvSharp.Point(titleLeft, titleTop), HersheyFonts.HersheySimplex, 1.25, Scalar.All(235), 3, LineTypes.AntiAlias);
+        Cv2.PutText(image, "Submissions Reached", new OpenCvSharp.Point(titleLeft, titleTop + 48), HersheyFonts.HersheySimplex, 1.25, Scalar.All(235), 3, LineTypes.AntiAlias);
+
+        var bodyLeft = popup.X + (int)Math.Round(popup.Width * 0.04);
+        var bodyTop = popup.Y + (int)Math.Round(popup.Height * 0.36);
+        Cv2.PutText(image, "While we appreciate your enthusiasm, our team can only", new OpenCvSharp.Point(bodyLeft, bodyTop), HersheyFonts.HersheySimplex, 0.68, Scalar.All(220), 2, LineTypes.AntiAlias);
+        Cv2.PutText(image, "process but so many submissions a day. Return in 23 hours,", new OpenCvSharp.Point(bodyLeft, bodyTop + 30), HersheyFonts.HersheySimplex, 0.68, Scalar.All(220), 2, LineTypes.AntiAlias);
+        Cv2.PutText(image, "12 minutes and 4 seconds to continue contributing to the", new OpenCvSharp.Point(bodyLeft, bodyTop + 60), HersheyFonts.HersheySimplex, 0.68, Scalar.All(220), 2, LineTypes.AntiAlias);
+        Cv2.PutText(image, "project.", new OpenCvSharp.Point(bodyLeft, bodyTop + 90), HersheyFonts.HersheySimplex, 0.68, Scalar.All(220), 2, LineTypes.AntiAlias);
+
+        var button = new Rect(
+            popup.X + (int)Math.Round(popup.Width * 0.04),
+            popup.Y + (int)Math.Round(popup.Height * 0.80),
+            (int)Math.Round(popup.Width * 0.90),
+            (int)Math.Round(popup.Height * 0.12));
+        Cv2.Rectangle(image, button, new Scalar(78, 63, 35), -1);
+        Cv2.Rectangle(image, button, new Scalar(190, 170, 80), 1);
+        Cv2.PutText(
+            image,
+            "OK",
+            new OpenCvSharp.Point(button.X + (button.Width / 2) - 16, button.Y + (button.Height / 2) + 8),
+            HersheyFonts.HersheySimplex,
+            0.7,
+            Scalar.All(220),
+            1,
+            LineTypes.AntiAlias);
     }
 
     private readonly record struct ClusterDefinition(OpenCvSharp.Point Center, OpenCvSharp.Size Size, Scalar Color);

@@ -48,6 +48,7 @@ internal sealed class SampleImageProcessor
     private static readonly int PointClusterMinimumCentroidDistance = ReadInt32FromEnvironment("DISCOVERY_POINT_CLUSTER_MINIMUM_CENTROID_DISTANCE", 90);
     private static readonly double PointClusterMinimumSeparationRatio = ReadDoubleFromEnvironment("DISCOVERY_POINT_CLUSTER_MINIMUM_SEPARATION_RATIO", 1.20);
     private const int SplitPolygonSeparationPixels = 2;
+    private const double MinimumNeighboringPolygonPointSpacing = 30.0;
     private const double MinimumInterPolygonPointSpacing = 15.0;
     private const int MaximumPointSpacingResolutionPasses = 15;
     private const int MaximumPolygonsPerSession = 8;
@@ -1227,6 +1228,13 @@ internal sealed class SampleImageProcessor
         return Math.Sqrt((deltaX * deltaX) + (deltaY * deltaY));
     }
 
+    private static double Distance(Point firstPoint, Point secondPoint)
+    {
+        var deltaX = firstPoint.X - secondPoint.X;
+        var deltaY = firstPoint.Y - secondPoint.Y;
+        return Math.Sqrt((deltaX * deltaX) + (deltaY * deltaY));
+    }
+
     private readonly record struct PointClusterEvaluation(List<Point[]> Polygons, double Score);
 
     private static Point[] BuildPolygonFromContour(Point[] contour, Size bounds)
@@ -1458,11 +1466,11 @@ internal sealed class SampleImageProcessor
 
     internal static void FinalizeDetectedPolygons(IList<Point[]> polygons, IReadOnlyList<Rect> markerBounds)
     {
-        NormalizePolygons(polygons);
+        NormalizePolygons(polygons, mergeCloseNeighboringPoints: false);
         OverwritePolygons(polygons, ApplyMarkerBoundaryConstraints(polygons.ToArray(), markerBounds));
         ResolvePolygonCollisions(polygons);
         EnsureMinimumPointSpacing(polygons);
-        NormalizePolygons(polygons);
+        NormalizePolygons(polygons, mergeCloseNeighboringPoints: false);
         OverwritePolygons(polygons, ApplyMarkerBoundaryConstraints(polygons.ToArray(), markerBounds));
         ResolvePolygonCollisions(polygons);
         EnsureMinimumPointSpacing(polygons);
@@ -1470,22 +1478,58 @@ internal sealed class SampleImageProcessor
         OverwritePolygons(polygons, ApplyMarkerBoundaryConstraints(polygons.ToArray(), markerBounds));
     }
 
-    internal static void NormalizePolygons(IList<Point[]> polygons)
+    internal static void NormalizePolygons(IList<Point[]> polygons, bool mergeCloseNeighboringPoints = true)
     {
         for (var polygonIndex = 0; polygonIndex < polygons.Count; polygonIndex++)
         {
-            polygons[polygonIndex] = NormalizePolygon(polygons[polygonIndex]);
+            polygons[polygonIndex] = NormalizePolygon(polygons[polygonIndex], mergeCloseNeighboringPoints);
         }
     }
 
-    internal static Point[] NormalizePolygon(Point[] polygon)
+    internal static Point[] NormalizePolygon(Point[] polygon, bool mergeCloseNeighboringPoints = true)
     {
-        if (polygon.Length < 3 || Cv2.IsContourConvex(polygon))
+        if (polygon.Length < 3)
         {
             return polygon;
         }
 
-        return Cv2.ConvexHull(polygon);
+        var normalizedPolygon = Cv2.IsContourConvex(polygon)
+            ? polygon
+            : Cv2.ConvexHull(polygon);
+        return mergeCloseNeighboringPoints
+            ? MergeCloseNeighboringPoints(normalizedPolygon)
+            : normalizedPolygon;
+    }
+
+    private static Point[] MergeCloseNeighboringPoints(Point[] polygon)
+    {
+        if (polygon.Length <= 3)
+        {
+            return polygon;
+        }
+
+        var mergedPoints = new List<Point> { polygon[0] };
+
+        for (var pointIndex = 1; pointIndex < polygon.Length; pointIndex++)
+        {
+            var candidate = polygon[pointIndex];
+            var remainingPointsAfterCandidate = polygon.Length - pointIndex - 1;
+            var canSkipCandidate = mergedPoints.Count + remainingPointsAfterCandidate >= 3;
+            if (canSkipCandidate && Distance(candidate, mergedPoints[^1]) < MinimumNeighboringPolygonPointSpacing)
+            {
+                continue;
+            }
+
+            mergedPoints.Add(candidate);
+        }
+
+        while (mergedPoints.Count > 3 &&
+               Distance(mergedPoints[0], mergedPoints[^1]) < MinimumNeighboringPolygonPointSpacing)
+        {
+            mergedPoints.RemoveAt(mergedPoints.Count - 1);
+        }
+
+        return mergedPoints.ToArray();
     }
 
     private static void OverwritePolygons(IList<Point[]> target, IReadOnlyList<Point[]> source)
