@@ -130,6 +130,29 @@ public sealed class SampleImageProcessorTests
     }
 
     [Fact]
+    public void AnalyzeImageFile_FullscreenCapturePlayfieldNotFound_ScalesFallbackPolygonsToDiscoveryPlot()
+    {
+        // Arrange
+        using var workspace = new TemporaryDirectory();
+        var imagePath = Path.Combine(workspace.Path, "fullscreen.png");
+        CreateSolidImage(imagePath, 1792, 1414);
+        var processor = new SampleImageProcessor();
+
+        // Act
+        var analysis = processor.AnalyzeImageFile(imagePath);
+
+        // Assert
+        Assert.False(analysis.PlayfieldDetection.IsFound);
+        Assert.Equal(2, analysis.Polygons.Count);
+
+        var fallbackBounds = Cv2.BoundingRect(analysis.Polygons.SelectMany(polygon => polygon).ToArray());
+        Assert.InRange(fallbackBounds.Left, 75, 90);
+        Assert.InRange(fallbackBounds.Top, 185, 195);
+        Assert.InRange(fallbackBounds.Right, 635, 645);
+        Assert.InRange(fallbackBounds.Bottom, 725, 735);
+    }
+
+    [Fact]
     public void AnalyzeImageFile_KnownSampleTemplateExists_UsesExpectedPolygons()
     {
         // Arrange

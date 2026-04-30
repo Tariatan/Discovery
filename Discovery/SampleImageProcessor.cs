@@ -6,10 +6,10 @@ namespace Discovery;
 internal sealed class SampleImageProcessor
 {
     private const string SamplesFolderName = "samples";
-    private const double FallbackPlayfieldLeftRatio = 0.11;
-    private const double FallbackPlayfieldTopRatio = 0.24;
-    private const double FallbackPlayfieldWidthRatio = 0.40;
-    private const double FallbackPlayfieldHeightRatio = 0.52;
+    private const double FallbackPlayfieldLeftRatio = 0.047;
+    private const double FallbackPlayfieldTopRatio = 0.130;
+    private const double FallbackPlayfieldWidthRatio = 0.320;
+    private const double FallbackPlayfieldHeightRatio = 0.407;
     private const int SaturationThreshold = 45;
     private const int BrightnessThreshold = 55;
     private const int BinaryMaskMaxValue = 255;

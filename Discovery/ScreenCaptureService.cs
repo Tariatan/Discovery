@@ -1,7 +1,7 @@
 using System.Drawing;
 using System.Drawing.Imaging;
 using System.IO;
-using System.Windows;
+using System.Runtime.InteropServices;
 
 namespace Discovery;
 
@@ -11,6 +11,10 @@ internal sealed class ScreenCaptureService
     private const string CaptureFilePrefix = "capture-";
     private const string CaptureTimestampFormat = "yyyyMMdd-HHmmss";
     private const int MinimumCaptureDimension = 1;
+    private const int VirtualScreenLeftMetric = 76;
+    private const int VirtualScreenTopMetric = 77;
+    private const int VirtualScreenWidthMetric = 78;
+    private const int VirtualScreenHeightMetric = 79;
 
     private readonly IScreenCaptureProvider m_ScreenCaptureProvider;
     private readonly SampleImageProcessor m_SampleImageProcessor;
@@ -63,6 +67,11 @@ internal sealed class ScreenCaptureService
         m_ScreenCaptureProvider.CaptureToFile(outputPath);
     }
 
+    internal SampleImageAnalysisResult AnalyzeImageFile(string imagePath)
+    {
+        return m_SampleImageProcessor.AnalyzeImageFile(imagePath);
+    }
+
     internal interface IScreenCaptureProvider
     {
         void CaptureToFile(string outputPath);
@@ -72,16 +81,25 @@ internal sealed class ScreenCaptureService
     {
         public void CaptureToFile(string outputPath)
         {
-            var left = (int)Math.Floor(SystemParameters.VirtualScreenLeft);
-            var top = (int)Math.Floor(SystemParameters.VirtualScreenTop);
-            var width = Math.Max(MinimumCaptureDimension, (int)Math.Ceiling(SystemParameters.VirtualScreenWidth));
-            var height = Math.Max(MinimumCaptureDimension, (int)Math.Ceiling(SystemParameters.VirtualScreenHeight));
+            var bounds = GetPhysicalVirtualScreenBounds();
 
-            using var bitmap = new Bitmap(width, height);
+            using var bitmap = new Bitmap(bounds.Width, bounds.Height);
             using var graphics = Graphics.FromImage(bitmap);
-            graphics.CopyFromScreen(left, top, 0, 0, new System.Drawing.Size(width, height));
+            graphics.CopyFromScreen(bounds.Left, bounds.Top, 0, 0, bounds.Size);
             bitmap.Save(outputPath, ImageFormat.Png);
         }
+
+        private static Rectangle GetPhysicalVirtualScreenBounds()
+        {
+            return new Rectangle(
+                GetSystemMetrics(VirtualScreenLeftMetric),
+                GetSystemMetrics(VirtualScreenTopMetric),
+                Math.Max(MinimumCaptureDimension, GetSystemMetrics(VirtualScreenWidthMetric)),
+                Math.Max(MinimumCaptureDimension, GetSystemMetrics(VirtualScreenHeightMetric)));
+        }
+
+        [DllImport("user32.dll")]
+        private static extern int GetSystemMetrics(int nIndex);
     }
 }
 

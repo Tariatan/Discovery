@@ -4,6 +4,11 @@ namespace Discovery.Tests;
 
 public sealed class AutomationServiceTests
 {
+    private const ushort VirtualKeyAlt = 0x12;
+    private const ushort VirtualKeyEnter = 0x0D;
+    private const ushort VirtualKeyL = 0x4C;
+    private const ushort VirtualKeyQ = 0x51;
+
     [Fact]
     public void AutomateCurrentScreen_PlayfieldAndControlButtonExist_ClicksPolygonPointsAndFocusesControlButton()
     {
@@ -138,7 +143,237 @@ public sealed class AutomationServiceTests
     }
 
     [Fact]
-    public void AutomateCurrentScreen_MaximumSubmissionsPopupAppearsAfterSubmit_StopsWithoutContinueClicksAndDrawsDebugOverlay()
+    public void AutomateCurrentScreen_MaximumSubmissionsPopupAppearsAfterSubmit_SelectsNextPilotAndContinues()
+    {
+        // Arrange
+        using var workspace = new TemporaryDirectory();
+        var capturePath = Path.Combine(workspace.Path, "fixture-capture.png");
+        var popupPath = Path.Combine(workspace.Path, "maximum-submissions.png");
+        var pilotSelectionScreenPath = Path.Combine(workspace.Path, "pilot-selection.png");
+        var pilotDirectory = Path.Combine(workspace.Path, "pilot");
+        var pilotAvatarLocation = new Point(240, 180);
+        SyntheticDiscoveryImageFactory.WriteTwoClusterImage(capturePath);
+        SyntheticDiscoveryImageFactory.WriteMaximumSubmissionsPopupImage(popupPath);
+        WritePilotAvatarTemplates(pilotDirectory, 3);
+        WritePilotSelectionScreen(pilotSelectionScreenPath, pilotAvatarLocation);
+
+        var captureInvocationCount = 0;
+        var screenCaptureService = new ScreenCaptureService(
+            new StubScreenCaptureProvider(outputPath =>
+            {
+                captureInvocationCount++;
+                var sourcePath = captureInvocationCount switch
+                {
+                    1 => capturePath,
+                    2 => popupPath,
+                    _ => pilotSelectionScreenPath
+                };
+                File.Copy(sourcePath, outputPath, overwrite: true);
+            }),
+            new SampleImageProcessor());
+        var automationClock = new StubAutomationClock();
+        using var cancellationTokenSource = new CancellationTokenSource();
+        var pilotUnlockPressed = false;
+        var automationInputController = new StubAutomationInputController
+        {
+            OnDelayAdvanceClock = milliseconds => automationClock.AdvanceBy(milliseconds),
+            OnDelay = milliseconds =>
+            {
+                if (pilotUnlockPressed && milliseconds == 300)
+                {
+                    cancellationTokenSource.Cancel();
+                }
+            },
+            OnPressKeyChord = (modifierVirtualKey, virtualKey) =>
+            {
+                if (modifierVirtualKey == VirtualKeyAlt && virtualKey == VirtualKeyL)
+                {
+                    pilotUnlockPressed = true;
+                }
+            }
+        };
+        var automationService = new AutomationService(screenCaptureService, automationInputController, automationClock);
+        var dpi = new System.Windows.DpiScale(1.0, 1.0);
+        AutomationSummary summary;
+
+        // Act
+        var currentDirectory = Directory.GetCurrentDirectory();
+        Directory.SetCurrentDirectory(workspace.Path);
+
+        try
+        {
+            summary = automationService.AutomateCurrentScreen(dpi, 2, cancellationTokenSource.Token);
+        }
+        finally
+        {
+            Directory.SetCurrentDirectory(currentDirectory);
+        }
+
+        // Assert
+        Assert.True(summary.MaximumSubmissionsReached);
+        Assert.True(summary.PilotSwitchSucceeded);
+        Assert.Equal(3, summary.CurrentPilotIndex);
+        Assert.Equal(3, summary.TargetPilotIndex);
+        Assert.Equal(3, captureInvocationCount);
+        Assert.Equal(summary.ClickedPointCount + 2, automationInputController.ClickCount);
+        Assert.Equal(new Point(pilotAvatarLocation.X + 32, pilotAvatarLocation.Y + 32), automationInputController.MoveTargets[^1]);
+        Assert.Equal(3, automationInputController.KeyboardInputs.Count);
+        AssertKeyChord(automationInputController.KeyboardInputs[0], VirtualKeyAlt, VirtualKeyQ);
+        AssertKey(automationInputController.KeyboardInputs[1], VirtualKeyEnter);
+        AssertKeyChord(automationInputController.KeyboardInputs[2], VirtualKeyAlt, VirtualKeyL);
+        Assert.Contains(20_000, automationInputController.Delays);
+        Assert.Equal(300, automationInputController.Delays[^1]);
+    }
+
+    [Fact]
+    public void AutomateCurrentScreen_MaximumSubmissionsPopupAppearsOnLastPilot_WrapsToFirstPilot()
+    {
+        // Arrange
+        using var workspace = new TemporaryDirectory();
+        var capturePath = Path.Combine(workspace.Path, "fixture-capture.png");
+        var popupPath = Path.Combine(workspace.Path, "maximum-submissions.png");
+        var pilotSelectionScreenPath = Path.Combine(workspace.Path, "pilot-selection.png");
+        var pilotDirectory = Path.Combine(workspace.Path, "pilot");
+        var pilotAvatarLocation = new Point(240, 180);
+        SyntheticDiscoveryImageFactory.WriteTwoClusterImage(capturePath);
+        SyntheticDiscoveryImageFactory.WriteMaximumSubmissionsPopupImage(popupPath);
+        WritePilotAvatarTemplates(pilotDirectory, 1);
+        WritePilotAvatarTemplates(pilotDirectory, 2);
+        WritePilotAvatarTemplates(pilotDirectory, 3);
+        WritePilotSelectionScreen(pilotSelectionScreenPath, pilotAvatarLocation);
+
+        var captureInvocationCount = 0;
+        var screenCaptureService = new ScreenCaptureService(
+            new StubScreenCaptureProvider(outputPath =>
+            {
+                captureInvocationCount++;
+                var sourcePath = captureInvocationCount switch
+                {
+                    1 => capturePath,
+                    2 => popupPath,
+                    _ => pilotSelectionScreenPath
+                };
+                File.Copy(sourcePath, outputPath, overwrite: true);
+            }),
+            new SampleImageProcessor());
+        var automationClock = new StubAutomationClock();
+        using var cancellationTokenSource = new CancellationTokenSource();
+        var pilotUnlockPressed = false;
+        var automationInputController = new StubAutomationInputController
+        {
+            OnDelayAdvanceClock = milliseconds => automationClock.AdvanceBy(milliseconds),
+            OnDelay = milliseconds =>
+            {
+                if (pilotUnlockPressed && milliseconds == 300)
+                {
+                    cancellationTokenSource.Cancel();
+                }
+            },
+            OnPressKeyChord = (modifierVirtualKey, virtualKey) =>
+            {
+                if (modifierVirtualKey == VirtualKeyAlt && virtualKey == VirtualKeyL)
+                {
+                    pilotUnlockPressed = true;
+                }
+            }
+        };
+        var automationService = new AutomationService(screenCaptureService, automationInputController, automationClock);
+        var dpi = new System.Windows.DpiScale(1.0, 1.0);
+        AutomationSummary summary;
+
+        // Act
+        var currentDirectory = Directory.GetCurrentDirectory();
+        Directory.SetCurrentDirectory(workspace.Path);
+
+        try
+        {
+            summary = automationService.AutomateCurrentScreen(dpi, 3, cancellationTokenSource.Token);
+        }
+        finally
+        {
+            Directory.SetCurrentDirectory(currentDirectory);
+        }
+
+        // Assert
+        Assert.True(summary.MaximumSubmissionsReached);
+        Assert.True(summary.PilotSwitchSucceeded);
+        Assert.Equal(1, summary.CurrentPilotIndex);
+        Assert.Equal(1, summary.TargetPilotIndex);
+        Assert.Equal(3, captureInvocationCount);
+        Assert.Equal(new Point(pilotAvatarLocation.X + 32, pilotAvatarLocation.Y + 32), automationInputController.MoveTargets[^1]);
+        Assert.EndsWith("pilot-1.png", summary.PilotSwitchCapturePath);
+    }
+
+    [Fact]
+    public void AutomateCurrentScreen_FocusedCaptureContainsPlayfieldAndPopupEvidence_DoesNotSwitchPilot()
+    {
+        // Arrange
+        using var workspace = new TemporaryDirectory();
+        var capturePath = Path.Combine(workspace.Path, "fixture-capture.png");
+        var focusedCapturePath = Path.Combine(workspace.Path, "focused-capture.png");
+        SyntheticDiscoveryImageFactory.WriteTwoClusterImage(capturePath);
+        SyntheticDiscoveryImageFactory.WriteMaximumSubmissionsPopupImageWithPlayfield(focusedCapturePath);
+        Assert.True(new MaximumSubmissionsPopupDetector().Detect(focusedCapturePath));
+
+        var captureInvocationCount = 0;
+        var screenCaptureService = new ScreenCaptureService(
+            new StubScreenCaptureProvider(outputPath =>
+            {
+                captureInvocationCount++;
+                File.Copy(captureInvocationCount == 1 ? capturePath : focusedCapturePath, outputPath, overwrite: true);
+            }),
+            new SampleImageProcessor());
+        var automationClock = new StubAutomationClock();
+        using var cancellationTokenSource = new CancellationTokenSource();
+        var sawAfterSubmitDelay = false;
+        var shortDelaysAfterSubmit = 0;
+        var automationInputController = new StubAutomationInputController
+        {
+            OnDelayAdvanceClock = milliseconds => automationClock.AdvanceBy(milliseconds),
+            OnDelay = milliseconds =>
+            {
+                if (milliseconds == 4_000)
+                {
+                    sawAfterSubmitDelay = true;
+                    return;
+                }
+
+                if (sawAfterSubmitDelay && milliseconds == 300)
+                {
+                    shortDelaysAfterSubmit++;
+                    if (shortDelaysAfterSubmit >= 2)
+                    {
+                        cancellationTokenSource.Cancel();
+                    }
+                }
+            }
+        };
+        var automationService = new AutomationService(screenCaptureService, automationInputController, automationClock);
+        var dpi = new System.Windows.DpiScale(1.0, 1.0);
+        AutomationSummary summary;
+
+        // Act
+        var currentDirectory = Directory.GetCurrentDirectory();
+        Directory.SetCurrentDirectory(workspace.Path);
+
+        try
+        {
+            summary = automationService.AutomateCurrentScreen(dpi, cancellationTokenSource.Token);
+        }
+        finally
+        {
+            Directory.SetCurrentDirectory(currentDirectory);
+        }
+
+        // Assert
+        Assert.False(summary.MaximumSubmissionsReached);
+        Assert.Equal(2, captureInvocationCount);
+        Assert.Equal(summary.ClickedPointCount + 3, automationInputController.ClickCount);
+        Assert.Empty(automationInputController.KeyboardInputs);
+    }
+
+    [Fact]
+    public void AutomateCurrentScreen_MaximumSubmissionsPopupAppearsAndNextPilotIsMissing_StopsAndDrawsDebugOverlay()
     {
         // Arrange
         using var workspace = new TemporaryDirectory();
@@ -175,7 +410,7 @@ public sealed class AutomationServiceTests
                 }
             }
         };
-        var automationService = new AutomationService(screenCaptureService, automationInputController, automationClock);
+        var automationService = new AutomationService(screenCaptureService, automationInputController);
         var dpi = new System.Windows.DpiScale(1.0, 1.0);
         AutomationSummary summary;
 
@@ -194,10 +429,19 @@ public sealed class AutomationServiceTests
 
         // Assert
         Assert.True(summary.MaximumSubmissionsReached);
-        Assert.Equal(2, captureInvocationCount);
+        Assert.False(summary.PilotSwitchSucceeded);
+        Assert.Equal(1, summary.CurrentPilotIndex);
+        Assert.Equal(2, summary.TargetPilotIndex);
+        Assert.Equal(3, captureInvocationCount);
         Assert.Equal(summary.ClickedPointCount + 1, automationInputController.ClickCount);
         Assert.True(File.Exists(Path.Combine(workspace.Path, summary.FocusedCapturePath)));
         Assert.True(CountMaximumSubmissionsDebugOverlayPixels(Path.Combine(workspace.Path, summary.FocusedCapturePath)) > 0);
+        Assert.NotNull(summary.PilotSwitchCapturePath);
+        Assert.True(File.Exists(Path.Combine(workspace.Path, summary.PilotSwitchCapturePath)));
+        Assert.True(CountPilotNotFoundDebugOverlayPixels(Path.Combine(workspace.Path, summary.PilotSwitchCapturePath)) > 0);
+        Assert.Equal(2, automationInputController.KeyboardInputs.Count);
+        AssertKeyChord(automationInputController.KeyboardInputs[0], VirtualKeyAlt, VirtualKeyQ);
+        AssertKey(automationInputController.KeyboardInputs[1], VirtualKeyEnter);
     }
 
     [Fact]
@@ -327,11 +571,17 @@ public sealed class AutomationServiceTests
     {
         public List<Point> MoveTargets { get; } = [];
 
+        public List<int> Delays { get; } = [];
+
+        public List<(ushort? ModifierVirtualKey, ushort VirtualKey)> KeyboardInputs { get; } = [];
+
         public int ClickCount { get; private set; }
 
         public Action<int>? OnDelay { get; init; }
 
         public Action<int>? OnDelayAdvanceClock { get; init; }
+
+        public Action<ushort, ushort>? OnPressKeyChord { get; init; }
 
         public void MoveTo(Point point)
         {
@@ -344,9 +594,23 @@ public sealed class AutomationServiceTests
             ClickCount++;
         }
 
+        public void PressKey(ushort virtualKey, CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            KeyboardInputs.Add((null, virtualKey));
+        }
+
+        public void PressKeyChord(ushort modifierVirtualKey, ushort virtualKey, CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            KeyboardInputs.Add((modifierVirtualKey, virtualKey));
+            OnPressKeyChord?.Invoke(modifierVirtualKey, virtualKey);
+        }
+
         public void Delay(int milliseconds, CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            Delays.Add(milliseconds);
             OnDelayAdvanceClock?.Invoke(milliseconds);
             OnDelay?.Invoke(milliseconds);
             cancellationToken.ThrowIfCancellationRequested();
@@ -365,12 +629,6 @@ public sealed class AutomationServiceTests
         }
     }
 
-    private static void CreateSolidImage(string path, int width, int height)
-    {
-        using var image = new Mat(new OpenCvSharp.Size(width, height), MatType.CV_8UC3, Scalar.All(0));
-        Cv2.ImWrite(path, image);
-    }
-
     private static int CountMaximumSubmissionsDebugOverlayPixels(string imagePath)
     {
         using var image = Cv2.ImRead(imagePath);
@@ -385,13 +643,81 @@ public sealed class AutomationServiceTests
         return Cv2.CountNonZero(mask);
     }
 
+    private static int CountPilotNotFoundDebugOverlayPixels(string imagePath)
+    {
+        using var image = Cv2.ImRead(imagePath);
+        if (image.Empty())
+        {
+            return 0;
+        }
+
+        using var region = new Mat(image, new Rect(0, 0, Math.Min(500, image.Width), Math.Min(80, image.Height)));
+        using var mask = new Mat();
+        Cv2.InRange(region, new Scalar(70, 110, 240), new Scalar(90, 130, 255), mask);
+        return Cv2.CountNonZero(mask);
+    }
+
+    private static void WritePilotAvatarTemplates(string pilotDirectory, int pilotIndex)
+    {
+        Directory.CreateDirectory(pilotDirectory);
+        using var avatar = CreatePilotAvatarTemplate(focused: false);
+        using var focusedAvatar = CreatePilotAvatarTemplate(focused: true);
+        Cv2.ImWrite(Path.Combine(pilotDirectory, $"{pilotIndex}.png"), avatar);
+        Cv2.ImWrite(Path.Combine(pilotDirectory, $"{pilotIndex}_focused.png"), focusedAvatar);
+    }
+
+    private static void WritePilotSelectionScreen(string outputPath, Point pilotAvatarLocation)
+    {
+        using var screen = new Mat(new Size(900, 640), MatType.CV_8UC3, new Scalar(18, 18, 18));
+        using var focusedAvatar = CreatePilotAvatarTemplate(focused: true);
+        using var region = new Mat(screen, new Rect(pilotAvatarLocation.X, pilotAvatarLocation.Y, focusedAvatar.Width, focusedAvatar.Height));
+        focusedAvatar.CopyTo(region);
+        Cv2.ImWrite(outputPath, screen);
+    }
+
+    private static Mat CreatePilotAvatarTemplate(bool focused)
+    {
+        var image = new Mat(new Size(64, 64), MatType.CV_8UC3, focused ? new Scalar(42, 70, 120) : new Scalar(85, 85, 85));
+        Cv2.Rectangle(image, new Rect(6, 6, 52, 52), focused ? new Scalar(80, 130, 210) : new Scalar(120, 120, 120), -1);
+        Cv2.Circle(image, new Point(32, 24), 12, focused ? new Scalar(130, 195, 245) : new Scalar(180, 180, 180), -1, LineTypes.AntiAlias);
+        Cv2.Ellipse(image, new Point(32, 48), new Size(18, 10), 0, 0, 360, focused ? new Scalar(35, 95, 185) : new Scalar(65, 65, 65), -1, LineTypes.AntiAlias);
+        Cv2.Line(image, new Point(10, 58), new Point(58, 10), focused ? new Scalar(210, 180, 60) : new Scalar(150, 150, 150), 2, LineTypes.AntiAlias);
+
+        if (focused)
+        {
+            return image;
+        }
+
+        var grayImage = new Mat();
+        Cv2.CvtColor(image, grayImage, ColorConversionCodes.BGR2GRAY);
+        image.Dispose();
+        return grayImage;
+    }
+
+    private static void AssertKey(
+        (ushort? ModifierVirtualKey, ushort VirtualKey) keyInput,
+        ushort virtualKey)
+    {
+        Assert.Null(keyInput.ModifierVirtualKey);
+        Assert.Equal(virtualKey, keyInput.VirtualKey);
+    }
+
+    private static void AssertKeyChord(
+        (ushort? ModifierVirtualKey, ushort VirtualKey) keyInput,
+        ushort modifierVirtualKey,
+        ushort virtualKey)
+    {
+        Assert.Equal(modifierVirtualKey, keyInput.ModifierVirtualKey);
+        Assert.Equal(virtualKey, keyInput.VirtualKey);
+    }
+
     private static void AssertNoMoreThanFiveSubmissionsPerMinute(IReadOnlyList<DateTime> submitTimes)
     {
-        for (var submitIndex = 0; submitIndex < submitTimes.Count; submitIndex++)
+        foreach (var windowStartedAt in submitTimes)
         {
-            var windowStartedAt = submitTimes[submitIndex];
             var windowEndedAt = windowStartedAt.AddMinutes(1);
-            var submissionsInWindow = submitTimes.Count(submitTime => submitTime >= windowStartedAt && submitTime < windowEndedAt);
+            var at = windowStartedAt;
+            var submissionsInWindow = submitTimes.Count(submitTime => submitTime >= at && submitTime < windowEndedAt);
             Assert.True(submissionsInWindow <= 5);
         }
     }

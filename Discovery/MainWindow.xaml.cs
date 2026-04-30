@@ -10,6 +10,8 @@ public partial class MainWindow
 {
     private const int HotKeyId = 1;
     private const int WindowMessageHotKey = 0x0312;
+    private const int MinimumPilotIndex = 1;
+    private const int MaximumPilotIndex = 3;
     private const uint ModifierAlt = 0x0001;
     private const uint ModifierShift = 0x0004;
     private const uint VirtualKeyF11 = 0x7A;
@@ -40,13 +42,15 @@ public partial class MainWindow
 
         m_IsAutomationRunning = true;
         SetStartButtonState(isRunning: true);
+        SetPilotIndexControlsEnabled(isEnabled: false);
         m_AutomationCancellationSource = new CancellationTokenSource();
         var dpi = VisualTreeHelper.GetDpi(this);
+        var initialPilotIndex = GetPilotIndex();
 
         try
         {
             m_AutomationTask = Task.Run(
-                () => m_AutomationService.AutomateCurrentScreen(dpi, m_AutomationCancellationSource.Token),
+                () => m_AutomationService.AutomateCurrentScreen(dpi, initialPilotIndex, m_AutomationCancellationSource.Token),
                 m_AutomationCancellationSource.Token);
             await m_AutomationTask;
         }
@@ -60,6 +64,7 @@ public partial class MainWindow
             m_AutomationTask = null;
             m_IsAutomationRunning = false;
             SetStartButtonState(isRunning: false);
+            SetPilotIndexControlsEnabled(isEnabled: true);
         }
     }
 
@@ -143,6 +148,42 @@ public partial class MainWindow
     {
         StartButton.Content = isRunning ? "Stop" : "Start";
         StartButton.Background = isRunning ? StopBrush : StartBrush;
+    }
+
+    private void SetPilotIndexControlsEnabled(bool isEnabled)
+    {
+        PilotIndexDecreaseButton.IsEnabled = isEnabled;
+        PilotIndexIncreaseButton.IsEnabled = isEnabled;
+    }
+
+    private void PilotIndexDecrease_Click(object sender, RoutedEventArgs e)
+    {
+        SetPilotIndex(GetPilotIndex() - 1);
+    }
+
+    private void PilotIndexIncrease_Click(object sender, RoutedEventArgs e)
+    {
+        SetPilotIndex(GetPilotIndex() + 1);
+    }
+
+    private void PilotIndexTextBox_LostFocus(object sender, RoutedEventArgs e)
+    {
+        SetPilotIndex(GetPilotIndex());
+    }
+
+    private int GetPilotIndex()
+    {
+        var pilotIndex = int.TryParse(PilotIndexTextBox.Text, out var parsedPilotIndex)
+            ? parsedPilotIndex
+            : MinimumPilotIndex;
+        pilotIndex = Math.Clamp(pilotIndex, MinimumPilotIndex, MaximumPilotIndex);
+        SetPilotIndex(pilotIndex);
+        return pilotIndex;
+    }
+
+    private void SetPilotIndex(int pilotIndex)
+    {
+        PilotIndexTextBox.Text = pilotIndex.ToString();
     }
 
     private void Samples_Click(object sender, RoutedEventArgs e)

@@ -9,18 +9,35 @@ internal sealed class AutomationService
     private const int StartupDelayMilliseconds = 3_000;
     private const int MaximumSubmissionsPerWindow = 5;
     private const int SubmissionWindowMilliseconds = 70_000;
+    private const int InitialPilotIndex = 1;
     private const int MinimumClickDelayMilliseconds = 300;
     private const int MaximumClickDelayMilliseconds = 800;
     private const int MouseDownDurationMilliseconds = 250;
     private const int AfterSubmitDelayMilliseconds = 4_000;
     private const int HoverDelayMilliseconds = 200;
+    private const int PilotLogoutDelayMilliseconds = 1_000;
+    private const int PilotSelectionConfirmDelayMilliseconds = 1_000;
+    private const int PilotSelectionLoadDelayMilliseconds = 5_000;
+    private const int PilotActivationDelayMilliseconds = 20_000;
+    private const ushort VirtualKeyAlt = 0x12;
+    private const ushort VirtualKeyEnter = 0x0D;
+    private const ushort VirtualKeyL = 0x4C;
+    private const ushort VirtualKeyQ = 0x51;
+    private const string PilotNotFoundDebugTextTemplate = "Pilot {0} not found";
+    private const double DebugOverlayTextScale = 0.8;
+    private const int DebugOverlayTextThickness = 2;
+    private const int DebugOverlayLeftPadding = 30;
+    private const int DebugOverlayTopPadding = 40;
     private static readonly Rect ControlButtonBounds = new(930, 645, 271, 11);
+    private static readonly Scalar DebugOverlayTextColor = new(80, 120, 255);
 
     private readonly ScreenCaptureService m_ScreenCaptureService;
     private readonly IAutomationInputController m_AutomationInputController;
     private readonly IAutomationClock m_AutomationClock;
     private readonly MaximumSubmissionsPopupDetector m_MaximumSubmissionsPopupDetector;
+    private readonly PilotAvatarLocator m_PilotAvatarLocator = new();
     private readonly Random m_Random = new();
+    private int m_CurrentPilotIndex = InitialPilotIndex;
 
     public AutomationService()
         : this(new ScreenCaptureService(), new AutomationInputController(), new SystemAutomationClock())
@@ -50,20 +67,34 @@ internal sealed class AutomationService
 
     public AutomationSummary AutomateCurrentScreen(System.Windows.DpiScale dpi, CancellationToken cancellationToken)
     {
+        return AutomateCurrentScreen(dpi, InitialPilotIndex, cancellationToken);
+    }
+
+    public AutomationSummary AutomateCurrentScreen(
+        System.Windows.DpiScale dpi,
+        int initialPilotIndex,
+        CancellationToken cancellationToken)
+    {
         m_AutomationInputController.Delay(StartupDelayMilliseconds, cancellationToken);
         cancellationToken.ThrowIfCancellationRequested();
 
         AutomationSummary? lastSummary = null;
         var rateLimiter = new AutomationSubmitRateLimiter();
+        m_CurrentPilotIndex = initialPilotIndex;
 
         try
         {
             while (!cancellationToken.IsCancellationRequested)
             {
                 lastSummary = AutomateSingleCycle(dpi, rateLimiter, cancellationToken);
-                if (lastSummary.MaximumSubmissionsReached)
+                if (lastSummary is { MaximumSubmissionsReached: true, PilotSwitchSucceeded: false })
                 {
                     return lastSummary;
+                }
+
+                if (lastSummary.PilotSwitchSucceeded)
+                {
+                    rateLimiter = new AutomationSubmitRateLimiter();
                 }
 
                 m_AutomationInputController.Delay(MinimumClickDelayMilliseconds, cancellationToken);
@@ -99,14 +130,21 @@ internal sealed class AutomationService
         rateLimiter.RecordSubmit(m_AutomationClock.UtcNow);
         m_AutomationInputController.Delay(AfterSubmitDelayMilliseconds, cancellationToken);
         var focusedCapturePath = CaptureFocusedScreenTrace(captureSummary, cancellationToken);
-        if (m_MaximumSubmissionsPopupDetector.DetectAndDrawDebugOverlay(focusedCapturePath))
+        var focusedCaptureAnalysis = m_ScreenCaptureService.AnalyzeImageFile(focusedCapturePath);
+        if (!focusedCaptureAnalysis.Result.PlayfieldFound &&
+            m_MaximumSubmissionsPopupDetector.DetectAndDrawDebugOverlay(focusedCapturePath))
         {
+            var pilotSwitchResult = SwitchToNextPilot(captureSummary, cancellationToken);
             return new AutomationSummary(
                 captureSummary,
                 clickedPointCount,
                 ControlButtonBounds,
                 focusedCapturePath,
-                MaximumSubmissionsReached: true);
+                MaximumSubmissionsReached: true,
+                CurrentPilotIndex: m_CurrentPilotIndex,
+                TargetPilotIndex: pilotSwitchResult.TargetPilotIndex,
+                PilotSwitchSucceeded: pilotSwitchResult.Succeeded,
+                PilotSwitchCapturePath: pilotSwitchResult.CapturePath);
         }
 
         // Left-click the 'Continue' button.
@@ -116,7 +154,40 @@ internal sealed class AutomationService
         // Left-click the next 'Continue' button.
         m_AutomationInputController.LeftClick(cancellationToken);
 
-        return new AutomationSummary(captureSummary, clickedPointCount, ControlButtonBounds, focusedCapturePath);
+        return new AutomationSummary(
+            captureSummary,
+            clickedPointCount,
+            ControlButtonBounds,
+            focusedCapturePath,
+            CurrentPilotIndex: m_CurrentPilotIndex);
+    }
+
+    private PilotSwitchResult SwitchToNextPilot(
+        ScreenCaptureAnalysisSummary captureSummary,
+        CancellationToken cancellationToken)
+    {
+        var nextPilotIndex = m_PilotAvatarLocator.GetNextPilotIndex(m_CurrentPilotIndex);
+
+        m_AutomationInputController.Delay(PilotLogoutDelayMilliseconds, cancellationToken);
+        m_AutomationInputController.PressKeyChord(VirtualKeyAlt, VirtualKeyQ, cancellationToken);
+        m_AutomationInputController.Delay(PilotSelectionConfirmDelayMilliseconds, cancellationToken);
+        m_AutomationInputController.PressKey(VirtualKeyEnter, cancellationToken);
+        m_AutomationInputController.Delay(PilotSelectionLoadDelayMilliseconds, cancellationToken);
+
+        var pilotSelectionCapturePath = CapturePilotSelectionScreenTrace(captureSummary, nextPilotIndex, cancellationToken);
+        using var pilotSelectionScreen = Cv2.ImRead(pilotSelectionCapturePath);
+        if (!m_PilotAvatarLocator.TryLocate(pilotSelectionScreen, nextPilotIndex, out var location))
+        {
+            DrawPilotNotFoundDebugOverlay(pilotSelectionCapturePath, nextPilotIndex);
+            return new PilotSwitchResult(nextPilotIndex, Succeeded: false, pilotSelectionCapturePath);
+        }
+
+        m_AutomationInputController.MoveTo(Center(location.Bounds));
+        m_AutomationInputController.LeftClick(cancellationToken);
+        m_AutomationInputController.Delay(PilotActivationDelayMilliseconds, cancellationToken);
+        m_CurrentPilotIndex = nextPilotIndex;
+        m_AutomationInputController.PressKeyChord(VirtualKeyAlt, VirtualKeyL, cancellationToken);
+        return new PilotSwitchResult(nextPilotIndex, Succeeded: true, pilotSelectionCapturePath);
     }
 
     private void DelayBeforeRateLimitedSubmit(AutomationSubmitRateLimiter rateLimiter, CancellationToken cancellationToken)
@@ -183,6 +254,44 @@ internal sealed class AutomationService
         return focusedCapturePath;
     }
 
+    private string CapturePilotSelectionScreenTrace(
+        ScreenCaptureAnalysisSummary captureSummary,
+        int pilotIndex,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var pilotSelectionCapturePath = Path.Combine(
+            captureSummary.CapturesDirectory,
+            $"{Path.GetFileNameWithoutExtension(captureSummary.CapturePath)}.pilot-{pilotIndex}.png");
+        m_ScreenCaptureService.CaptureCurrentScreenToFile(pilotSelectionCapturePath);
+        return pilotSelectionCapturePath;
+    }
+
+    private static void DrawPilotNotFoundDebugOverlay(string imagePath, int pilotIndex)
+    {
+        using var image = Cv2.ImRead(imagePath);
+        if (image.Empty())
+        {
+            return;
+        }
+
+        Cv2.PutText(
+            image,
+            string.Format(PilotNotFoundDebugTextTemplate, pilotIndex),
+            new Point(DebugOverlayLeftPadding, DebugOverlayTopPadding),
+            HersheyFonts.HersheySimplex,
+            DebugOverlayTextScale,
+            DebugOverlayTextColor,
+            DebugOverlayTextThickness,
+            LineTypes.AntiAlias);
+        Cv2.ImWrite(imagePath, image);
+    }
+
+    private static Point Center(Rect bounds)
+    {
+        return new Point(bounds.X + bounds.Width / 2, bounds.Y + bounds.Height / 2);
+    }
+
     internal static Point ScalePointForDpi(Point point, System.Windows.DpiScale dpi)
     {
         return new Point(
@@ -196,6 +305,10 @@ internal sealed class AutomationService
 
         void LeftClick(CancellationToken cancellationToken);
 
+        void PressKey(ushort virtualKey, CancellationToken cancellationToken);
+
+        void PressKeyChord(ushort modifierVirtualKey, ushort virtualKey, CancellationToken cancellationToken);
+
         void Delay(int milliseconds, CancellationToken cancellationToken);
     }
 
@@ -208,6 +321,7 @@ internal sealed class AutomationService
     {
         private const uint LeftDownEvent = 0x0002;
         private const uint LeftUpEvent = 0x0004;
+        private const uint KeyUpEvent = 0x0002;
 
         public void MoveTo(Point point)
         {
@@ -239,6 +353,36 @@ internal sealed class AutomationService
             cancellationToken.ThrowIfCancellationRequested();
         }
 
+        public void PressKey(ushort virtualKey, CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            keybd_event((byte)virtualKey, 0, 0, UIntPtr.Zero);
+            Thread.Sleep(MouseDownDurationMilliseconds);
+            keybd_event((byte)virtualKey, 0, KeyUpEvent, UIntPtr.Zero);
+            Thread.Sleep(MouseDownDurationMilliseconds);
+            cancellationToken.ThrowIfCancellationRequested();
+        }
+
+        public void PressKeyChord(ushort modifierVirtualKey, ushort virtualKey, CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            keybd_event((byte)modifierVirtualKey, 0, 0, UIntPtr.Zero);
+
+            try
+            {
+                keybd_event((byte)virtualKey, 0, 0, UIntPtr.Zero);
+                Thread.Sleep(MouseDownDurationMilliseconds);
+                keybd_event((byte)virtualKey, 0, KeyUpEvent, UIntPtr.Zero);
+            }
+            finally
+            {
+                keybd_event((byte)modifierVirtualKey, 0, KeyUpEvent, UIntPtr.Zero);
+            }
+
+            Thread.Sleep(MouseDownDurationMilliseconds);
+            cancellationToken.ThrowIfCancellationRequested();
+        }
+
         public void Delay(int milliseconds, CancellationToken cancellationToken)
         {
             cancellationToken.WaitHandle.WaitOne(milliseconds);
@@ -250,6 +394,9 @@ internal sealed class AutomationService
 
         [DllImport("user32.dll")]
         private static extern void mouse_event(uint dwFlags, uint dx, uint dy, uint dwData, UIntPtr dwExtraInfo);
+
+        [DllImport("user32.dll")]
+        private static extern void keybd_event(byte bVk, byte bScan, uint dwFlags, UIntPtr dwExtraInfo);
     }
 
     private sealed class SystemAutomationClock : IAutomationClock
@@ -291,9 +438,18 @@ internal sealed class AutomationService
     }
 }
 
+internal sealed record PilotSwitchResult(
+    int TargetPilotIndex,
+    bool Succeeded,
+    string CapturePath);
+
 internal sealed record AutomationSummary(
     ScreenCaptureAnalysisSummary CaptureSummary,
     int ClickedPointCount,
     Rect? ControlButtonBounds,
     string FocusedCapturePath,
-    bool MaximumSubmissionsReached = false);
+    bool MaximumSubmissionsReached = false,
+    int CurrentPilotIndex = 1,
+    int? TargetPilotIndex = null,
+    bool PilotSwitchSucceeded = false,
+    string? PilotSwitchCapturePath = null);

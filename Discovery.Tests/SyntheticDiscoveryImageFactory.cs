@@ -55,6 +55,28 @@ internal static class SyntheticDiscoveryImageFactory
         return image;
     }
 
+    public static Mat CreateMaximumSubmissionsPopupImageWithPlayfield()
+    {
+        var image = CreateMaximumSubmissionsPopupImage();
+        using var marker = LoadMarkerImage();
+        PasteMarker(image, marker, new OpenCvSharp.Point(PlayfieldLeft, PlayfieldTop));
+        PasteMarker(image, marker, new OpenCvSharp.Point(PlayfieldRight - marker.Width, PlayfieldTop));
+        PasteMarker(image, marker, new OpenCvSharp.Point(PlayfieldLeft, PlayfieldBottom - marker.Height));
+        PasteMarker(image, marker, new OpenCvSharp.Point(PlayfieldRight - marker.Width, PlayfieldBottom - marker.Height));
+        DrawCluster(image, new OpenCvSharp.Point(330, 430), new OpenCvSharp.Size(110, 70), new Scalar(0, 120, 255));
+        DrawCluster(image, new OpenCvSharp.Point(315, 420), new OpenCvSharp.Size(55, 35), new Scalar(0, 200, 255));
+        return image;
+    }
+
+    public static Mat CreateWideScreenMaximumSubmissionsPopupImage()
+    {
+        var image = new Mat(new OpenCvSharp.Size(3000, 1600), MatType.CV_8UC3, new Scalar(12, 14, 16));
+        using var popupImage = CreateMaximumSubmissionsPopupImage();
+        using var region = new Mat(image, new Rect(120, 20, popupImage.Width, popupImage.Height));
+        popupImage.CopyTo(region);
+        return image;
+    }
+
     public static void WriteSingleClusterImage(string outputPath)
     {
         using var image = CreateSingleClusterImage();
@@ -88,6 +110,12 @@ internal static class SyntheticDiscoveryImageFactory
     public static void WriteMaximumSubmissionsPopupImage(string outputPath)
     {
         using var image = CreateMaximumSubmissionsPopupImage();
+        Cv2.ImWrite(outputPath, image);
+    }
+
+    public static void WriteMaximumSubmissionsPopupImageWithPlayfield(string outputPath)
+    {
+        using var image = CreateMaximumSubmissionsPopupImageWithPlayfield();
         Cv2.ImWrite(outputPath, image);
     }
 
