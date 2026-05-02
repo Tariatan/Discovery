@@ -71,6 +71,7 @@ public partial class MainWindow
         m_AutomationCancellationSource = cancellationSource;
         SetStartButtonEnabled(isEnabled: false);
         SetPilotIndexControlsEnabled(isEnabled: false);
+        ApplyDebugImageRetention();
         var initialPilotIndex = GetPilotIndex();
 
         try
@@ -113,6 +114,7 @@ public partial class MainWindow
 
     private async Task StartAutomationAsync(int initialPilotIndex, CancellationTokenSource cancellationSource)
     {
+        ApplyDebugImageRetention();
         m_IsAutomationRunning = true;
         SetStartButtonState(isRunning: true);
         SetStartButtonEnabled(isEnabled: true);
@@ -267,6 +269,14 @@ public partial class MainWindow
     {
         PilotIndexDecreaseButton.IsEnabled = isEnabled;
         PilotIndexIncreaseButton.IsEnabled = isEnabled;
+        DebugCheckBox.IsEnabled = isEnabled;
+    }
+
+    private void ApplyDebugImageRetention()
+    {
+        var keepDebugImages = DebugCheckBox.IsChecked == true;
+        m_AutomationService.KeepDebugImages = keepDebugImages;
+        Logger.Information("Debug image retention set. KeepDebugImages={KeepDebugImages}", keepDebugImages);
     }
 
     private void PilotIndexDecrease_Click(object sender, RoutedEventArgs e)

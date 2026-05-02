@@ -5,7 +5,7 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d"
         Title="Discovery"
-        Topmost="True" ResizeMode="NoResize" Height="126" Width="251" WindowStyle="ToolWindow" Background="{DynamicResource {x:Static SystemColors.DesktopBrushKey}}">
+        Topmost="True" ResizeMode="NoResize" Height="154" Width="251" WindowStyle="ToolWindow" Background="{DynamicResource {x:Static SystemColors.DesktopBrushKey}}">
     <Grid Margin="6">
         <Grid.ColumnDefinitions>
             <ColumnDefinition Width="48"/>
@@ -16,6 +16,7 @@
         </Grid.ColumnDefinitions>
         <Grid.RowDefinitions>
             <RowDefinition Height="30"/>
+            <RowDefinition Height="26"/>
             <RowDefinition Height="42"/>
         </Grid.RowDefinitions>
         <TextBlock Grid.Row="0"
@@ -55,7 +56,15 @@
                 Background="#FF7F2CB4"
                 FontWeight="Bold"
                 Margin="8,0,0,0" />
-        <Button Grid.Row="1"
+        <CheckBox Grid.Row="1"
+                  Grid.Column="0"
+                  Grid.ColumnSpan="5"
+                  x:Name="DebugCheckBox"
+                  Content="Debug"
+                  Foreground="White"
+                  VerticalAlignment="Center"
+                  FontWeight="Bold" />
+        <Button Grid.Row="2"
                 Grid.Column="0"
                 x:Name="StartButton"
                 Click="Automate_Click"

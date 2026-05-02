@@ -49,6 +49,8 @@ internal sealed class AutomationService
     private readonly Random m_Random = new();
     private int m_CurrentPilotIndex = InitialPilotIndex;
 
+    internal bool KeepDebugImages { get; set; } = true;
+
     public AutomationService()
         : this(new ScreenCaptureService(), new AutomationInputController(), new SystemAutomationClock())
     {
@@ -80,8 +82,10 @@ internal sealed class AutomationService
         int initialPilotIndex,
         CancellationToken cancellationToken)
     {
+        using var traceImages = CreateTraceImageScope();
         Logger.Information("Preparing launcher startup automation. InitialPilotIndex={InitialPilotIndex}", initialPilotIndex);
         var playButtonCapturePath = m_ScreenCaptureService.CaptureCurrentScreenTrace(".play");
+        traceImages.Track(playButtonCapturePath);
         cancellationToken.ThrowIfCancellationRequested();
 
         using var playButtonScreen = Cv2.ImRead(playButtonCapturePath);
@@ -105,6 +109,7 @@ internal sealed class AutomationService
         m_AutomationInputController.PressKeyChord(VirtualKeyControl, VirtualKeyW, cancellationToken);
 
         var pilotSelectionCapturePath = m_ScreenCaptureService.CaptureCurrentScreenTrace($".startup-pilot-{initialPilotIndex}");
+        traceImages.Track(pilotSelectionCapturePath);
         cancellationToken.ThrowIfCancellationRequested();
         using var pilotSelectionScreen = Cv2.ImRead(pilotSelectionCapturePath);
         if (!m_PilotAvatarLocator.TryLocate(pilotSelectionScreen, initialPilotIndex, out var pilotLocation))
@@ -193,7 +198,9 @@ internal sealed class AutomationService
         AutomationSubmitRateLimiter rateLimiter,
         CancellationToken cancellationToken)
     {
+        using var traceImages = CreateTraceImageScope();
         var captureSummary = m_ScreenCaptureService.CaptureAndAnalyzeCurrentScreen();
+        traceImages.Track(captureSummary);
         cancellationToken.ThrowIfCancellationRequested();
         var clickedPointCount = ClickPolygonPoints(captureSummary.Analysis.Polygons, cancellationToken);
         Logger.Information(
@@ -216,11 +223,12 @@ internal sealed class AutomationService
         rateLimiter.RecordSubmit(m_AutomationClock.UtcNow);
         m_AutomationInputController.Delay(AfterSubmitDelayMilliseconds, cancellationToken);
         var focusedCapturePath = CaptureFocusedScreenTrace(captureSummary, cancellationToken);
+        traceImages.Track(focusedCapturePath);
         var focusedCaptureAnalysis = m_ScreenCaptureService.AnalyzeImageFile(focusedCapturePath, writeAnnotatedOutput: false);
         if (!focusedCaptureAnalysis.Result.PlayfieldFound &&
             m_MaximumSubmissionsPopupDetector.DetectAndDrawDebugOverlay(focusedCapturePath))
         {
-            var pilotSwitchResult = SwitchToNextPilot(captureSummary, cancellationToken);
+            var pilotSwitchResult = SwitchToNextPilot(captureSummary, traceImages, cancellationToken);
             Logger.Warning(
                 "Maximum submissions popup detected. FocusedCapturePath={FocusedCapturePath}, CurrentPilotIndex={CurrentPilotIndex}, TargetPilotIndex={TargetPilotIndex}, PilotSwitchSucceeded={PilotSwitchSucceeded}, PilotSwitchCapturePath={PilotSwitchCapturePath}",
                 focusedCapturePath,
@@ -263,6 +271,7 @@ internal sealed class AutomationService
 
     private PilotSwitchResult SwitchToNextPilot(
         ScreenCaptureAnalysisSummary captureSummary,
+        TraceImageScope traceImages,
         CancellationToken cancellationToken)
     {
         if (!m_PilotAvatarLocator.TryGetNextPilotIndex(m_CurrentPilotIndex, out var nextPilotIndex))
@@ -285,6 +294,7 @@ internal sealed class AutomationService
         m_AutomationInputController.Delay(PilotSelectionLoadDelayMilliseconds, cancellationToken);
 
         var pilotSelectionCapturePath = CapturePilotSelectionScreenTrace(captureSummary, nextPilotIndex, cancellationToken);
+        traceImages.Track(pilotSelectionCapturePath);
         using var pilotSelectionScreen = Cv2.ImRead(pilotSelectionCapturePath);
         if (!m_PilotAvatarLocator.TryLocate(pilotSelectionScreen, nextPilotIndex, out var location))
         {
@@ -307,6 +317,11 @@ internal sealed class AutomationService
             pilotSelectionCapturePath,
             location.Bounds);
         return new PilotSwitchResult(nextPilotIndex, Succeeded: true, pilotSelectionCapturePath);
+    }
+
+    private TraceImageScope CreateTraceImageScope()
+    {
+        return new TraceImageScope(KeepDebugImages);
     }
 
     private void DelayBeforeRateLimitedSubmit(AutomationSubmitRateLimiter rateLimiter, CancellationToken cancellationToken)
@@ -561,6 +576,58 @@ internal sealed class AutomationService
     private sealed class SystemAutomationClock : IAutomationClock
     {
         public DateTime UtcNow => DateTime.UtcNow;
+    }
+
+    private sealed class TraceImageScope(bool keepImages) : IDisposable
+    {
+        private readonly HashSet<string> m_ImagePaths = new(StringComparer.OrdinalIgnoreCase);
+
+        public void Track(ScreenCaptureAnalysisSummary captureSummary)
+        {
+            Track(captureSummary.CapturePath);
+            Track(captureSummary.Analysis.Result.OutputPath);
+        }
+
+        public void Track(string? imagePath)
+        {
+            if (string.IsNullOrWhiteSpace(imagePath))
+            {
+                return;
+            }
+
+            m_ImagePaths.Add(Path.GetFullPath(imagePath));
+        }
+
+        public void Dispose()
+        {
+            if (keepImages)
+            {
+                return;
+            }
+
+            foreach (var imagePath in m_ImagePaths)
+            {
+                DeleteImageFile(imagePath);
+            }
+        }
+
+        private static void DeleteImageFile(string imagePath)
+        {
+            try
+            {
+                if (!File.Exists(imagePath))
+                {
+                    return;
+                }
+
+                File.Delete(imagePath);
+                Logger.Debug("Deleted trace image. ImagePath={ImagePath}", imagePath);
+            }
+            catch (Exception exception)
+            {
+                Logger.Warning(exception, "Could not delete trace image. ImagePath={ImagePath}", imagePath);
+            }
+        }
     }
 
     private sealed class AutomationSubmitRateLimiter

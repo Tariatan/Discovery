@@ -89,6 +89,66 @@ public sealed class AutomationServiceTests
     }
 
     [Fact]
+    public void AutomateCurrentScreen_DebugImagesDisabled_DeletesCycleTraceImages()
+    {
+        // Arrange
+        using var workspace = new TemporaryDirectory();
+        var capturePath = Path.Combine(workspace.Path, "fixture-capture.png");
+        SyntheticDiscoveryImageFactory.WriteTwoClusterImage(capturePath);
+        var screenCaptureService = new ScreenCaptureService(
+            new StubScreenCaptureProvider(outputPath => File.Copy(capturePath, outputPath)),
+            new SampleImageProcessor());
+        using var cancellationTokenSource = new CancellationTokenSource();
+        var sawAfterSubmitDelay = false;
+        var shortDelaysAfterSubmit = 0;
+        var automationInputController = new StubAutomationInputController
+        {
+            OnDelay = milliseconds =>
+            {
+                if (milliseconds == 4_000)
+                {
+                    sawAfterSubmitDelay = true;
+                    return;
+                }
+
+                if (sawAfterSubmitDelay && milliseconds == 300)
+                {
+                    shortDelaysAfterSubmit++;
+                    if (shortDelaysAfterSubmit >= 2)
+                    {
+                        cancellationTokenSource.Cancel();
+                    }
+                }
+            }
+        };
+        var automationService = new AutomationService(screenCaptureService, automationInputController)
+        {
+            KeepDebugImages = false
+        };
+        var dpi = new System.Windows.DpiScale(1.0, 1.0);
+        AutomationSummary summary;
+
+        // Act
+        var currentDirectory = Directory.GetCurrentDirectory();
+        Directory.SetCurrentDirectory(workspace.Path);
+
+        try
+        {
+            summary = automationService.AutomateCurrentScreen(dpi, cancellationTokenSource.Token);
+        }
+        finally
+        {
+            Directory.SetCurrentDirectory(currentDirectory);
+        }
+
+        // Assert
+        Assert.False(File.Exists(Path.Combine(workspace.Path, summary.CaptureSummary.CapturePath)));
+        Assert.False(File.Exists(Path.Combine(workspace.Path, summary.CaptureSummary.Analysis.Result.OutputPath)));
+        Assert.False(File.Exists(Path.Combine(workspace.Path, summary.FocusedCapturePath)));
+        Assert.True(File.Exists(capturePath));
+    }
+
+    [Fact]
     public void AutomateCurrentScreen_StopRequestedAfterFirstCycle_StartsNextCycleOnlyWhenNotCanceled()
     {
         // Arrange
@@ -472,6 +532,42 @@ public sealed class AutomationServiceTests
         Assert.Empty(automationInputController.KeyboardInputs);
         Assert.True(File.Exists(Path.Combine(workspace.Path, summary.PlayButtonCapturePath)));
         Assert.True(CountDebugOverlayPixels(Path.Combine(workspace.Path, summary.PlayButtonCapturePath)) > 0);
+    }
+
+    [Fact]
+    public void PrepareAutomationFromLauncherStartup_DebugImagesDisabled_DeletesStartupTraceImages()
+    {
+        // Arrange
+        using var workspace = new TemporaryDirectory();
+        var startupCapturePath = Path.Combine(workspace.Path, "startup.png");
+        WriteBlankStartupScreen(startupCapturePath);
+        var screenCaptureService = new ScreenCaptureService(
+            new StubScreenCaptureProvider(outputPath => File.Copy(startupCapturePath, outputPath, overwrite: true)),
+            new SampleImageProcessor());
+        var automationInputController = new StubAutomationInputController();
+        var automationService = new AutomationService(screenCaptureService, automationInputController)
+        {
+            KeepDebugImages = false
+        };
+        StartupAutomationSummary summary;
+
+        // Act
+        var currentDirectory = Directory.GetCurrentDirectory();
+        Directory.SetCurrentDirectory(workspace.Path);
+
+        try
+        {
+            summary = automationService.PrepareAutomationFromLauncherStartup(1, CancellationToken.None);
+        }
+        finally
+        {
+            Directory.SetCurrentDirectory(currentDirectory);
+        }
+
+        // Assert
+        Assert.False(summary.PlayButtonFound);
+        Assert.False(File.Exists(Path.Combine(workspace.Path, summary.PlayButtonCapturePath)));
+        Assert.True(File.Exists(startupCapturePath));
     }
 
     [Fact]
