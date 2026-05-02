@@ -47,18 +47,22 @@ internal sealed class ScreenCaptureService
 
     internal ScreenCaptureAnalysisSummary CaptureAndAnalyzeCurrentScreen()
     {
-        Directory.CreateDirectory(m_CapturesDirectory);
-
-        var capturePath = Path.Combine(
-            m_CapturesDirectory,
-            $"{CaptureFilePrefix}{DateTime.Now.ToString(CaptureTimestampFormat)}.png");
-
         // Persist the captured desktop first so the exact input remains available
         // for debugging, then process it through the same screenshot pipeline.
-        CaptureCurrentScreenToFile(capturePath);
+        var capturePath = CaptureCurrentScreenTrace();
         var analysis = m_SampleImageProcessor.AnalyzeImageFile(capturePath);
 
         return new ScreenCaptureAnalysisSummary(m_CapturesDirectory, capturePath, analysis);
+    }
+
+    internal string CaptureCurrentScreenTrace(string suffix = "")
+    {
+        Directory.CreateDirectory(m_CapturesDirectory);
+        var capturePath = Path.Combine(
+            m_CapturesDirectory,
+            $"{CaptureFilePrefix}{DateTime.Now.ToString(CaptureTimestampFormat)}{suffix}.png");
+        CaptureCurrentScreenToFile(capturePath);
+        return capturePath;
     }
 
     internal void CaptureCurrentScreenToFile(string outputPath)
@@ -67,9 +71,9 @@ internal sealed class ScreenCaptureService
         m_ScreenCaptureProvider.CaptureToFile(outputPath);
     }
 
-    internal SampleImageAnalysisResult AnalyzeImageFile(string imagePath)
+    internal SampleImageAnalysisResult AnalyzeImageFile(string imagePath, bool writeAnnotatedOutput = true)
     {
-        return m_SampleImageProcessor.AnalyzeImageFile(imagePath);
+        return m_SampleImageProcessor.AnalyzeImageFile(imagePath, writeAnnotatedOutput);
     }
 
     internal interface IScreenCaptureProvider

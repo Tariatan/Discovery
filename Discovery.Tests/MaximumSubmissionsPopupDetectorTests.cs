@@ -102,6 +102,39 @@ public sealed class MaximumSubmissionsPopupDetectorTests
         Assert.False(detected);
     }
 
+    [Fact]
+    public void Detect_FullScreenImageContainsBottomInventoryGrid_ReturnsFalse()
+    {
+        // Arrange
+        using var image = CreateBottomInventoryGridImage();
+        var detector = new MaximumSubmissionsPopupDetector();
+
+        // Act
+        var detected = detector.Detect(image);
+
+        // Assert
+        Assert.False(detected);
+    }
+
+    [Fact]
+    public void Detect_FocusedCaptureInventoryCrop_ReturnsFalse()
+    {
+        // Arrange
+        var imagePath = Path.Combine(
+            AppContext.BaseDirectory,
+            "Fixtures",
+            "maximum-submissions-false-positive-inventory-crop.png");
+        using var image = Cv2.ImRead(imagePath);
+        Assert.False(image.Empty());
+        var detector = new MaximumSubmissionsPopupDetector();
+
+        // Act
+        var detected = detector.Detect(image);
+
+        // Assert
+        Assert.False(detected);
+    }
+
     private static Mat CreateBusyPilotSelectionImage()
     {
         var image = new Mat(new Size(3000, 1600), MatType.CV_8UC3, new Scalar(14, 18, 22));
@@ -253,5 +286,45 @@ public sealed class MaximumSubmissionsPopupDetectorTests
         Cv2.Rectangle(image, new Rect(candidate.X + 135, candidate.Y + 330, 450, 45), new Scalar(75, 60, 35), -1);
         Cv2.Rectangle(image, new Rect(candidate.X + 135, candidate.Y + 330, 450, 45), new Scalar(180, 165, 80), 1);
         Cv2.PutText(image, "Continue", new Point(candidate.X + 305, candidate.Y + 359), HersheyFonts.HersheySimplex, 0.6, Scalar.All(215), 1, LineTypes.AntiAlias);
+    }
+
+    private static Mat CreateBottomInventoryGridImage()
+    {
+        var image = new Mat(new Size(2551, 2008), MatType.CV_8UC3, new Scalar(15, 18, 20));
+        Cv2.Rectangle(image, new Rect(48, 1325, 900, 650), new Scalar(5, 5, 5), -1);
+        Cv2.Rectangle(image, new Rect(48, 1325, 900, 650), new Scalar(35, 45, 48), 1);
+        Cv2.PutText(image, "Inventory", new Point(130, 1382), HersheyFonts.HersheySimplex, 0.9, Scalar.All(205), 2, LineTypes.AntiAlias);
+
+        var start = new Point(330, 1510);
+        for (var row = 0; row < 3; row++)
+        {
+            for (var column = 0; column < 4; column++)
+            {
+                DrawInventoryItem(image, new Point(start.X + column * 135, start.Y + row * 170));
+            }
+        }
+
+        Cv2.Rectangle(image, new Rect(297, 1725, 497, 85), new Scalar(45, 65, 68), -1);
+        Cv2.Rectangle(image, new Rect(297, 1725, 497, 85), new Scalar(115, 160, 165), 1);
+        Cv2.PutText(image, "Capital Ship", new Point(420, 1768), HersheyFonts.HersheySimplex, 0.7, Scalar.All(220), 1, LineTypes.AntiAlias);
+        Cv2.PutText(image, "Capital Ship", new Point(620, 1795), HersheyFonts.HersheySimplex, 0.7, Scalar.All(220), 1, LineTypes.AntiAlias);
+        return image;
+    }
+
+    private static void DrawInventoryItem(Mat image, Point topLeft)
+    {
+        var icon = new Rect(topLeft.X, topLeft.Y, 88, 57);
+        Cv2.Rectangle(image, icon, new Scalar(55, 100, 110), 2);
+        var ship = new[]
+        {
+            new Point(icon.X + 4, icon.Y + 28),
+            new Point(icon.X + 50, icon.Y + 5),
+            new Point(icon.X + 86, icon.Y + 25),
+            new Point(icon.X + 44, icon.Y + 52)
+        };
+        Cv2.FillConvexPoly(image, ship, Scalar.All(210), LineTypes.AntiAlias);
+        Cv2.Line(image, new Point(icon.X + 12, icon.Y + 44), new Point(icon.X + 83, icon.Y + 12), Scalar.All(235), 2, LineTypes.AntiAlias);
+        Cv2.PutText(image, "Capital", new Point(topLeft.X + 4, topLeft.Y + 92), HersheyFonts.HersheySimplex, 0.58, Scalar.All(225), 1, LineTypes.AntiAlias);
+        Cv2.PutText(image, "Ship", new Point(topLeft.X + 22, topLeft.Y + 126), HersheyFonts.HersheySimplex, 0.58, Scalar.All(225), 1, LineTypes.AntiAlias);
     }
 }

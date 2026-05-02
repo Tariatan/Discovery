@@ -49,3 +49,50 @@ Gold-standard sample: a scored training/check sample depicting the expected clus
 - When that happens, a narrow recovery pass below the primary cluster can be useful, but it should only activate when the main pipeline found a single dominant cluster and there is a clearly detached lower population.
 - Sparse-cluster recovery should stay density-aware and local. It is a fallback for a specific miss pattern, not a second general-purpose cluster detector.
 - Keep coordinate spaces consistent during any recovery or refinement pass. A valid recovered contour can be lost entirely if playfield-local masks are compared against already translated full-image polygons.
+
+## Known-Sample Matching
+
+- Known-sample matching is an intentional shortcut, not a temporary hack. When a live playfield closely matches a known example, using the matching expected polygons is often more reliable than re-detecting the same shape from noisy dots.
+- Match only the playfield crop, not the whole screenshot. Whole-screen matching is too sensitive to window position, DPI, popup state, and surrounding UI.
+- Keep example assets in relative runtime folders. Do not reintroduce project-root walking or absolute paths.
+- Use `*.expected.png` as the human-readable gold standard and `*.expected.masked.png` as an optional extraction aid. Do not overwrite the original expected image with a thresholded or filtered variant.
+- Extracting polygons from semi-transparent brown overlays is inherently unstable because the apparent color depends on the dots underneath. Prefer masked sidecars for difficult examples.
+- Overlay extraction should use conservative morphology. Aggressive closing can merge two nearby expected regions into one contour before polygon simplification even starts.
+- The known-sample template cache assumes the `expected` folder is stable for the process lifetime. That leaves a bounded unmanaged `Mat` retention concern, but it is acceptable for the current fixed-runtime model.
+
+## Boundary and Shape Finalization
+
+- Any step that mutates polygons can reintroduce invalid shapes. After randomization, clipping, spacing, or collision handling, run the final cleanup sequence again instead of assuming earlier cleanup still holds.
+- Final polygons must stay inside the marker frame: left edge of left markers, right edge of right markers, top edge of top markers, and bottom edge of bottom markers.
+- Upper-band polygons have an extra practical ceiling at the upper edge of the top marker row when their centroid is still in the marker band. This prevents top polygons from bleeding into marker/UI territory.
+- Randomization is for natural-looking clicks only. It must happen before final restrictions so randomized points are still clipped, normalized, spaced, and collision-checked.
+- Normalization should remove inward dents by returning to an outward hull. Expected regions are generally protruding, not concave.
+- Merge close neighboring points during normalization so the automation does not produce machine-like clusters of nearly identical clicks. Keep at least three points.
+- Point spacing must check vertex-to-vertex and vertex-to-segment distance. A point can be dangerously close to another polygon edge even when no two vertices are close.
+- Collision resolution must run after marker clipping too. Clipping can create a fresh overlap even if polygons were non-overlapping before the clip.
+
+## Automation Constraints
+
+- The control button location is intentionally hardcoded to the known safe screen region. Earlier template, contour, and rules-panel detection attempts were less reliable than the fixed safe area in the target setup.
+- Startup `PLAY NOW` detection uses template matching against `Properties.Resources.play`. If launcher art changes significantly, update the resource first before retuning thresholds.
+- If startup `PLAY NOW` detection fails, leave automation idle and write a `No play button found` debug overlay into the startup capture.
+- Scale the control-button cursor target for DPI before calling `SetCursorPos`. WPF logical coordinates and physical screen pixels diverge on scaled displays.
+- Current cursor mapping assumes the app runs on the single-monitor setup it was built for. Multi-monitor virtual-screen offsets are a known limitation; supporting them requires translating capture-image points back through `VirtualScreenLeft` and `VirtualScreenTop`.
+- Capture full physical virtual-screen dimensions with Win32 `GetSystemMetrics`, not WPF `SystemParameters`. WPF dimensions are logical units and caused cropped screenshots at 150% display scaling.
+- Once a mouse-down event is sent, always send mouse-up in a `finally`. Cancellation must stop future work, not leave the physical mouse button logically held down.
+- The submit cap is a rolling submit-time rule, not a cycle-count rule. Delay immediately before Submit when five submissions already exist inside the rolling window; the current safety window is 90 seconds.
+- The submit limiter must be service-level state and must not reset after pilot switches or manual Stop/Start inside the same app process. Resetting it creates a loophole that can exceed five Submit clicks in a rolling minute.
+- Only run maximum-submissions popup detection after a focused screenshot fails playfield detection. Running it while the normal playfield is visible produced false positives on ordinary Project Discovery panels.
+- Analyze focused screenshots without writing `*.focused.annotated.png`; they are state probes after Submit focus, not normal detector debug artifacts. Only the max-submissions popup detector should draw into the focused screenshot, and only when the popup is actually detected.
+- Popup detection should require the whole popup signature: two-line title evidence, body text bands, information icon shape, and button evidence. Single-feature detection is too prone to false positives.
+- Keep the popup information-icon evidence round-ish. A wide contour can be produced by inventory item art and cyan item frames, which caused a focused post-submit screenshot to be misclassified as the max-submissions popup.
+- When a max-submissions popup is detected, draw debug text into the focused screenshot. When pilot selection fails, draw `Pilot <index> not found` into the pilot-selection screenshot.
+- Pilot switching should scan the relative `pilot` folder and advance through available numeric avatars instead of blindly incrementing forever. Do not wrap after the highest configured pilot; if max submissions is detected on the last pilot, press `Alt+Shift+Q`, wait 2 seconds, press `Enter`, then stop automation.
+
+## Testing and Handoff Notes
+
+- Prefer generated images and temporary directories in tests. Do not make tests depend on local capture, sample, expected, failed, or pilot folders unless explicitly requested.
+- Keep test names, class names, and `Arrange - Act - Assert` comments aligned with `AGENTS.md`.
+- Regression tests should characterize real workflow behavior when the pipeline is being tuned. Low-value tests for trivial helpers are less useful than sample-like generated cases.
+- File locks from a running `Discovery.exe` or Visual Studio can block test/build output. Close the app before treating a build failure as a code failure.
+- Long agent threads in this project repeatedly died during remote compaction. Keep durable findings in this file and keep future task scopes narrow enough that handoff does not depend on the chat history.

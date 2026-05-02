@@ -151,10 +151,15 @@ internal sealed class SampleImageProcessor
 
     public SampleProcessingResult ProcessImageFile(string imagePath)
     {
-        return AnalyzeImageFile(imagePath).Result;
+        return AnalyzeImageFile(imagePath, writeAnnotatedOutput: true).Result;
     }
 
     internal SampleImageAnalysisResult AnalyzeImageFile(string imagePath)
+    {
+        return AnalyzeImageFile(imagePath, writeAnnotatedOutput: true);
+    }
+
+    internal SampleImageAnalysisResult AnalyzeImageFile(string imagePath, bool writeAnnotatedOutput)
     {
         using var image = Cv2.ImRead(imagePath);
         if (image.Empty())
@@ -163,7 +168,6 @@ internal sealed class SampleImageProcessor
         }
 
         var playfieldDetection = m_PlayfieldDetector.Detect(image);
-        using var annotated = image.Clone();
         IReadOnlyList<Point[]> polygons = Array.Empty<Point[]>();
         var usedKnownSampleTemplate = false;
         string? matchedSampleFileName = null;
@@ -201,13 +205,18 @@ internal sealed class SampleImageProcessor
             polygons = BuildFallbackPolygons(BuildFallbackPlayfieldBounds(image.Size()));
         }
 
-        DrawDebugOverlay(annotated, playfieldDetection, polygons);
+        var outputPath = imagePath;
+        if (writeAnnotatedOutput)
+        {
+            using var annotated = image.Clone();
+            DrawDebugOverlay(annotated, playfieldDetection, polygons);
 
-        var outputSuffix = usedKnownSampleTemplate
-            ? $".annotated.byexample{BuildMatchedExampleSuffix(matchedSampleFileName)}.png"
-            : ".annotated.png";
-        var outputPath = Path.Combine(Path.GetDirectoryName(imagePath)!, Path.GetFileNameWithoutExtension(imagePath) + outputSuffix);
-        Cv2.ImWrite(outputPath, annotated);
+            var outputSuffix = usedKnownSampleTemplate
+                ? $".annotated.byexample{BuildMatchedExampleSuffix(matchedSampleFileName)}.png"
+                : ".annotated.png";
+            outputPath = Path.Combine(Path.GetDirectoryName(imagePath)!, Path.GetFileNameWithoutExtension(imagePath) + outputSuffix);
+            Cv2.ImWrite(outputPath, annotated);
+        }
 
         var result = new SampleProcessingResult(
             Path.GetFileName(imagePath),

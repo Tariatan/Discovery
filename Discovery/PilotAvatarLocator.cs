@@ -11,21 +11,25 @@ internal sealed class PilotAvatarLocator
 
     public int GetNextPilotIndex(int currentPilotIndex)
     {
-        var availablePilotIndices = GetAvailablePilotIndices();
-        if (availablePilotIndices.Count == 0)
-        {
-            return 1;
-        }
+        return TryGetNextPilotIndex(currentPilotIndex, out var nextPilotIndex)
+            ? nextPilotIndex
+            : GetFirstPilotIndex();
+    }
 
+    public bool TryGetNextPilotIndex(int currentPilotIndex, out int nextPilotIndex)
+    {
+        var availablePilotIndices = GetAvailablePilotIndices();
         foreach (var pilotIndex in availablePilotIndices)
         {
             if (pilotIndex > currentPilotIndex)
             {
-                return pilotIndex;
+                nextPilotIndex = pilotIndex;
+                return true;
             }
         }
 
-        return availablePilotIndices[0];
+        nextPilotIndex = currentPilotIndex;
+        return false;
     }
 
     public bool TryLocate(Mat screen, int pilotIndex, out PilotAvatarLocation location)
@@ -79,6 +83,14 @@ internal sealed class PilotAvatarLocator
             .Distinct()
             .Order()
             .ToArray();
+    }
+
+    private static int GetFirstPilotIndex()
+    {
+        var availablePilotIndices = GetAvailablePilotIndices();
+        return availablePilotIndices.Count == 0
+            ? 1
+            : availablePilotIndices[0];
     }
 
     private static int ParsePilotIndex(string? fileNameWithoutExtension)

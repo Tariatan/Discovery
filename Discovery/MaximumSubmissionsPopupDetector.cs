@@ -25,8 +25,8 @@ internal sealed class MaximumSubmissionsPopupDetector
     private const int MinimumInformationIconContourWidth = 32;
     private const int MinimumInformationIconContourHeight = 32;
     private const int MinimumInformationIconContourMargin = 2;
-    private const double MinimumInformationIconAspectRatio = 0.50;
-    private const double MaximumInformationIconAspectRatio = 1.80;
+    private const double MinimumInformationIconAspectRatio = 0.75;
+    private const double MaximumInformationIconAspectRatio = 1.30;
     private const double MaximumFilledSquareIconFillRatio = 0.88;
     private const double MaximumBodyWhiteContourArea = 1_200.0;
     private const double TitleWhiteMaximumDensity = 0.22;

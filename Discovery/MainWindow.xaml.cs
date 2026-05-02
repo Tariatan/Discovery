@@ -29,29 +29,88 @@ public partial class MainWindow
         InitializeComponent();
         RestoreWindowPosition();
         SourceInitialized += MainWindow_SourceInitialized;
+        Loaded += MainWindow_Loaded;
         Closed += MainWindow_Closed;
     }
 
     private async void Automate_Click(object sender, RoutedEventArgs e)
     {
+        if (!StartButton.IsEnabled)
+        {
+            return;
+        }
+
         if (m_IsAutomationRunning)
         {
             StopAutomation();
             return;
         }
 
-        m_IsAutomationRunning = true;
-        SetStartButtonState(isRunning: true);
+        await StartAutomationAsync(GetPilotIndex(), new CancellationTokenSource());
+    }
+
+    private async void MainWindow_Loaded(object sender, RoutedEventArgs e)
+    {
+        Loaded -= MainWindow_Loaded;
+        await TryRunStartupAutomationAsync();
+    }
+
+    private async Task TryRunStartupAutomationAsync()
+    {
+        if (m_IsAutomationRunning)
+        {
+            return;
+        }
+
+        var cancellationSource = new CancellationTokenSource();
+        m_AutomationCancellationSource = cancellationSource;
+        SetStartButtonEnabled(isEnabled: false);
         SetPilotIndexControlsEnabled(isEnabled: false);
-        m_AutomationCancellationSource = new CancellationTokenSource();
-        var dpi = VisualTreeHelper.GetDpi(this);
         var initialPilotIndex = GetPilotIndex();
 
         try
         {
+            var startupSummary = await Task.Run(
+                () => m_AutomationService.PrepareAutomationFromLauncherStartup(initialPilotIndex, cancellationSource.Token),
+                cancellationSource.Token);
+            if (!startupSummary.ShouldStartAutomation)
+            {
+                return;
+            }
+
+            await StartAutomationAsync(initialPilotIndex, cancellationSource);
+            cancellationSource = null;
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        finally
+        {
+            if (cancellationSource is not null)
+            {
+                cancellationSource.Dispose();
+                m_AutomationCancellationSource = null;
+                SetStartButtonState(isRunning: false);
+                SetStartButtonEnabled(isEnabled: true);
+                SetPilotIndexControlsEnabled(isEnabled: true);
+            }
+        }
+    }
+
+    private async Task StartAutomationAsync(int initialPilotIndex, CancellationTokenSource cancellationSource)
+    {
+        m_IsAutomationRunning = true;
+        SetStartButtonState(isRunning: true);
+        SetStartButtonEnabled(isEnabled: true);
+        SetPilotIndexControlsEnabled(isEnabled: false);
+        m_AutomationCancellationSource = cancellationSource;
+        var dpi = VisualTreeHelper.GetDpi(this);
+
+        try
+        {
             m_AutomationTask = Task.Run(
-                () => m_AutomationService.AutomateCurrentScreen(dpi, initialPilotIndex, m_AutomationCancellationSource.Token),
-                m_AutomationCancellationSource.Token);
+                () => m_AutomationService.AutomateCurrentScreen(dpi, initialPilotIndex, cancellationSource.Token),
+                cancellationSource.Token);
             await m_AutomationTask;
         }
         catch (OperationCanceledException)
@@ -59,11 +118,16 @@ public partial class MainWindow
         }
         finally
         {
-            m_AutomationCancellationSource?.Dispose();
-            m_AutomationCancellationSource = null;
+            cancellationSource.Dispose();
+            if (ReferenceEquals(m_AutomationCancellationSource, cancellationSource))
+            {
+                m_AutomationCancellationSource = null;
+            }
+
             m_AutomationTask = null;
             m_IsAutomationRunning = false;
             SetStartButtonState(isRunning: false);
+            SetStartButtonEnabled(isEnabled: true);
             SetPilotIndexControlsEnabled(isEnabled: true);
         }
     }
@@ -87,6 +151,7 @@ public partial class MainWindow
 
     private void MainWindow_Closed(object? sender, EventArgs e)
     {
+        StopAutomation();
         Settings.Default.FormLocation = new Point(Left, Top);
         Settings.Default.Save();
         var windowInteropHelper = new WindowInteropHelper(this);
@@ -148,6 +213,11 @@ public partial class MainWindow
     {
         StartButton.Content = isRunning ? "Stop" : "Start";
         StartButton.Background = isRunning ? StopBrush : StartBrush;
+    }
+
+    private void SetStartButtonEnabled(bool isEnabled)
+    {
+        StartButton.IsEnabled = isEnabled;
     }
 
     private void SetPilotIndexControlsEnabled(bool isEnabled)
