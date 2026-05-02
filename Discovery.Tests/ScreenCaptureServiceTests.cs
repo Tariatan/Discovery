@@ -68,7 +68,7 @@ public sealed class ScreenCaptureServiceTests
 
     private static void CreateBlankCapture(string outputPath)
     {
-        using var image = new Mat(new OpenCvSharp.Size(1200, 900), MatType.CV_8UC3, Scalar.All(0));
+        using var image = new Mat(new Size(1200, 900), MatType.CV_8UC3, Scalar.All(0));
         Cv2.ImWrite(outputPath, image);
     }
 

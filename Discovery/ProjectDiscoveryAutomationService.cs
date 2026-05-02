@@ -1,11 +1,10 @@
 using OpenCvSharp;
 using System.IO;
-using System.Runtime.InteropServices;
 using Serilog;
 
 namespace Discovery;
 
-internal sealed class AutomationService
+internal sealed class ProjectDiscoveryAutomationService
 {
     private const int StartupDelayMilliseconds = 3_000;
     private const int LauncherStartupDelayMilliseconds = 20_000;
@@ -14,7 +13,6 @@ internal sealed class AutomationService
     private const int InitialPilotIndex = 1;
     private const int MinimumClickDelayMilliseconds = 300;
     private const int MaximumClickDelayMilliseconds = 800;
-    private const int MouseDownDurationMilliseconds = 250;
     private const int AfterSubmitDelayMilliseconds = 4_000;
     private const int HoverDelayMilliseconds = 200;
     private const int PilotLogoutDelayMilliseconds = 1_000;
@@ -37,7 +35,7 @@ internal sealed class AutomationService
     private const int DebugOverlayTopPadding = 40;
     private static readonly Rect ControlButtonBounds = new(930, 645, 271, 11);
     private static readonly Scalar DebugOverlayTextColor = new(80, 120, 255);
-    private static readonly Serilog.ILogger Logger = Log.ForContext<AutomationService>();
+    private static readonly ILogger Logger = Log.ForContext<ProjectDiscoveryAutomationService>();
 
     private readonly ScreenCaptureService m_ScreenCaptureService;
     private readonly IAutomationInputController m_AutomationInputController;
@@ -51,17 +49,17 @@ internal sealed class AutomationService
 
     internal bool KeepDebugImages { get; set; } = true;
 
-    public AutomationService()
+    public ProjectDiscoveryAutomationService()
         : this(new ScreenCaptureService(), new AutomationInputController(), new SystemAutomationClock())
     {
     }
 
-    internal AutomationService(ScreenCaptureService screenCaptureService, IAutomationInputController automationInputController)
+    internal ProjectDiscoveryAutomationService(ScreenCaptureService screenCaptureService, IAutomationInputController automationInputController)
         : this(screenCaptureService, automationInputController, new SystemAutomationClock())
     {
     }
 
-    internal AutomationService(
+    internal ProjectDiscoveryAutomationService(
         ScreenCaptureService screenCaptureService,
         IAutomationInputController automationInputController,
         IAutomationClock automationClock)
@@ -439,143 +437,6 @@ internal sealed class AutomationService
         return new Point(
             (int)Math.Round(point.X * dpi.DpiScaleX, MidpointRounding.AwayFromZero),
             (int)Math.Round(point.Y * dpi.DpiScaleY, MidpointRounding.AwayFromZero));
-    }
-
-    internal interface IAutomationInputController
-    {
-        void MoveTo(Point point);
-
-        void LeftClick(CancellationToken cancellationToken);
-
-        void PressKey(ushort virtualKey, CancellationToken cancellationToken);
-
-        void PressKeyChord(ushort modifierVirtualKey, ushort virtualKey, CancellationToken cancellationToken);
-
-        void PressKeyChord(
-            ushort firstModifierVirtualKey,
-            ushort secondModifierVirtualKey,
-            ushort virtualKey,
-            CancellationToken cancellationToken);
-
-        void Delay(int milliseconds, CancellationToken cancellationToken);
-    }
-
-    internal interface IAutomationClock
-    {
-        DateTime UtcNow { get; }
-    }
-
-    private sealed class AutomationInputController : IAutomationInputController
-    {
-        private const uint LeftDownEvent = 0x0002;
-        private const uint LeftUpEvent = 0x0004;
-        private const uint KeyUpEvent = 0x0002;
-
-        public void MoveTo(Point point)
-        {
-            SetCursorPos(point.X, point.Y);
-        }
-
-        public void LeftClick(CancellationToken cancellationToken)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            Thread.Sleep(MouseDownDurationMilliseconds);
-            cancellationToken.ThrowIfCancellationRequested();
-            var leftButtonPressed = false;
-
-            try
-            {
-                mouse_event(LeftDownEvent, 0, 0, 0, UIntPtr.Zero);
-                leftButtonPressed = true;
-                Thread.Sleep(MouseDownDurationMilliseconds);
-            }
-            finally
-            {
-                if (leftButtonPressed)
-                {
-                    mouse_event(LeftUpEvent, 0, 0, 0, UIntPtr.Zero);
-                }
-            }
-
-            Thread.Sleep(MouseDownDurationMilliseconds);
-            cancellationToken.ThrowIfCancellationRequested();
-        }
-
-        public void PressKey(ushort virtualKey, CancellationToken cancellationToken)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            keybd_event((byte)virtualKey, 0, 0, UIntPtr.Zero);
-            Thread.Sleep(MouseDownDurationMilliseconds);
-            keybd_event((byte)virtualKey, 0, KeyUpEvent, UIntPtr.Zero);
-            Thread.Sleep(MouseDownDurationMilliseconds);
-            cancellationToken.ThrowIfCancellationRequested();
-        }
-
-        public void PressKeyChord(ushort modifierVirtualKey, ushort virtualKey, CancellationToken cancellationToken)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            keybd_event((byte)modifierVirtualKey, 0, 0, UIntPtr.Zero);
-
-            try
-            {
-                keybd_event((byte)virtualKey, 0, 0, UIntPtr.Zero);
-                Thread.Sleep(MouseDownDurationMilliseconds);
-                keybd_event((byte)virtualKey, 0, KeyUpEvent, UIntPtr.Zero);
-            }
-            finally
-            {
-                keybd_event((byte)modifierVirtualKey, 0, KeyUpEvent, UIntPtr.Zero);
-            }
-
-            Thread.Sleep(MouseDownDurationMilliseconds);
-            cancellationToken.ThrowIfCancellationRequested();
-        }
-
-        public void PressKeyChord(
-            ushort firstModifierVirtualKey,
-            ushort secondModifierVirtualKey,
-            ushort virtualKey,
-            CancellationToken cancellationToken)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            keybd_event((byte)firstModifierVirtualKey, 0, 0, UIntPtr.Zero);
-            keybd_event((byte)secondModifierVirtualKey, 0, 0, UIntPtr.Zero);
-
-            try
-            {
-                keybd_event((byte)virtualKey, 0, 0, UIntPtr.Zero);
-                Thread.Sleep(MouseDownDurationMilliseconds);
-                keybd_event((byte)virtualKey, 0, KeyUpEvent, UIntPtr.Zero);
-            }
-            finally
-            {
-                keybd_event((byte)secondModifierVirtualKey, 0, KeyUpEvent, UIntPtr.Zero);
-                keybd_event((byte)firstModifierVirtualKey, 0, KeyUpEvent, UIntPtr.Zero);
-            }
-
-            Thread.Sleep(MouseDownDurationMilliseconds);
-            cancellationToken.ThrowIfCancellationRequested();
-        }
-
-        public void Delay(int milliseconds, CancellationToken cancellationToken)
-        {
-            cancellationToken.WaitHandle.WaitOne(milliseconds);
-            cancellationToken.ThrowIfCancellationRequested();
-        }
-
-        [DllImport("user32.dll")]
-        private static extern bool SetCursorPos(int x, int y);
-
-        [DllImport("user32.dll")]
-        private static extern void mouse_event(uint dwFlags, uint dx, uint dy, uint dwData, UIntPtr dwExtraInfo);
-
-        [DllImport("user32.dll")]
-        private static extern void keybd_event(byte bVk, byte bScan, uint dwFlags, UIntPtr dwExtraInfo);
-    }
-
-    private sealed class SystemAutomationClock : IAutomationClock
-    {
-        public DateTime UtcNow => DateTime.UtcNow;
     }
 
     private sealed class TraceImageScope(bool keepImages) : IDisposable

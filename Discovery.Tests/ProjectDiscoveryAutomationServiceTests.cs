@@ -3,7 +3,7 @@ using OpenCvSharp;
 
 namespace Discovery.Tests;
 
-public sealed class AutomationServiceTests
+public sealed class ProjectDiscoveryAutomationServiceTests
 {
     private const ushort VirtualKeyAlt = 0x12;
     private const ushort VirtualKeyControl = 0x11;
@@ -48,7 +48,7 @@ public sealed class AutomationServiceTests
                 }
             }
         };
-        var automationService = new AutomationService(screenCaptureService, automationInputController, automationClock);
+        var automationService = new ProjectDiscoveryAutomationService(screenCaptureService, automationInputController, automationClock);
         var dpi = new System.Windows.DpiScale(1.0, 1.0);
         AutomationSummary summary;
 
@@ -121,7 +121,7 @@ public sealed class AutomationServiceTests
                 }
             }
         };
-        var automationService = new AutomationService(screenCaptureService, automationInputController)
+        var automationService = new ProjectDiscoveryAutomationService(screenCaptureService, automationInputController)
         {
             KeepDebugImages = false
         };
@@ -188,7 +188,7 @@ public sealed class AutomationServiceTests
                 }
             }
         };
-        var automationService = new AutomationService(screenCaptureService, automationInputController, automationClock);
+        var automationService = new ProjectDiscoveryAutomationService(screenCaptureService, automationInputController, automationClock);
         var dpi = new System.Windows.DpiScale(1.0, 1.0);
 
         // Act
@@ -258,7 +258,7 @@ public sealed class AutomationServiceTests
                 }
             }
         };
-        var automationService = new AutomationService(screenCaptureService, automationInputController, automationClock);
+        var automationService = new ProjectDiscoveryAutomationService(screenCaptureService, automationInputController, automationClock);
         var dpi = new System.Windows.DpiScale(1.0, 1.0);
         AutomationSummary summary;
 
@@ -324,7 +324,7 @@ public sealed class AutomationServiceTests
         {
             OnDelayAdvanceClock = milliseconds => automationClock.AdvanceBy(milliseconds)
         };
-        var automationService = new AutomationService(screenCaptureService, automationInputController, automationClock);
+        var automationService = new ProjectDiscoveryAutomationService(screenCaptureService, automationInputController, automationClock);
         var dpi = new System.Windows.DpiScale(1.0, 1.0);
         AutomationSummary summary;
 
@@ -399,7 +399,7 @@ public sealed class AutomationServiceTests
                 }
             }
         };
-        var automationService = new AutomationService(screenCaptureService, automationInputController, automationClock);
+        var automationService = new ProjectDiscoveryAutomationService(screenCaptureService, automationInputController, automationClock);
         var dpi = new System.Windows.DpiScale(1.0, 1.0);
         AutomationSummary summary;
 
@@ -443,7 +443,7 @@ public sealed class AutomationServiceTests
             new SampleImageProcessor());
         using var cancellationTokenSource = new CancellationTokenSource();
         var automationInputController = new StubAutomationInputController();
-        var automationService = new AutomationService(screenCaptureService, automationInputController);
+        var automationService = new ProjectDiscoveryAutomationService(screenCaptureService, automationInputController);
         var dpi = new System.Windows.DpiScale(1.0, 1.0);
         AutomationSummary summary;
 
@@ -484,7 +484,7 @@ public sealed class AutomationServiceTests
         var dpi = new System.Windows.DpiScale(1.25, 1.25);
 
         // Act
-        var scaledPoint = AutomationService.ScalePointForDpi(point, dpi);
+        var scaledPoint = ProjectDiscoveryAutomationService.ScalePointForDpi(point, dpi);
 
         // Assert
         Assert.Equal(1331, scaledPoint.X);
@@ -507,7 +507,7 @@ public sealed class AutomationServiceTests
             }),
             new SampleImageProcessor());
         var automationInputController = new StubAutomationInputController();
-        var automationService = new AutomationService(screenCaptureService, automationInputController);
+        var automationService = new ProjectDiscoveryAutomationService(screenCaptureService, automationInputController);
         StartupAutomationSummary summary;
 
         // Act
@@ -545,7 +545,7 @@ public sealed class AutomationServiceTests
             new StubScreenCaptureProvider(outputPath => File.Copy(startupCapturePath, outputPath, overwrite: true)),
             new SampleImageProcessor());
         var automationInputController = new StubAutomationInputController();
-        var automationService = new AutomationService(screenCaptureService, automationInputController)
+        var automationService = new ProjectDiscoveryAutomationService(screenCaptureService, automationInputController)
         {
             KeepDebugImages = false
         };
@@ -593,7 +593,7 @@ public sealed class AutomationServiceTests
             }),
             new SampleImageProcessor());
         var automationInputController = new StubAutomationInputController();
-        var automationService = new AutomationService(screenCaptureService, automationInputController);
+        var automationService = new ProjectDiscoveryAutomationService(screenCaptureService, automationInputController);
         StartupAutomationSummary summary;
 
         // Act
@@ -643,7 +643,7 @@ public sealed class AutomationServiceTests
             }),
             new SampleImageProcessor());
         var automationInputController = new StubAutomationInputController();
-        var automationService = new AutomationService(screenCaptureService, automationInputController);
+        var automationService = new ProjectDiscoveryAutomationService(screenCaptureService, automationInputController);
         StartupAutomationSummary summary;
 
         // Act
@@ -685,7 +685,7 @@ public sealed class AutomationServiceTests
         {
             OnDelayAdvanceClock = milliseconds => automationClock.AdvanceBy(milliseconds)
         };
-        var automationService = new AutomationService(screenCaptureService, automationInputController, automationClock);
+        var automationService = new ProjectDiscoveryAutomationService(screenCaptureService, automationInputController, automationClock);
         var dpi = new System.Windows.DpiScale(1.0, 1.0);
         using var cancellationTokenSource = new CancellationTokenSource();
         cancellationTokenSource.Cancel();
@@ -747,7 +747,7 @@ public sealed class AutomationServiceTests
                 }
             }
         };
-        var automationService = new AutomationService(screenCaptureService, automationInputController, automationClock);
+        var automationService = new ProjectDiscoveryAutomationService(screenCaptureService, automationInputController, automationClock);
         var dpi = new System.Windows.DpiScale(1.0, 1.0);
 
         // Act
@@ -840,7 +840,7 @@ public sealed class AutomationServiceTests
                 }
             }
         };
-        var automationService = new AutomationService(screenCaptureService, automationInputController, automationClock);
+        var automationService = new ProjectDiscoveryAutomationService(screenCaptureService, automationInputController, automationClock);
         var dpi = new System.Windows.DpiScale(1.0, 1.0);
 
         // Act
@@ -872,7 +872,7 @@ public sealed class AutomationServiceTests
         }
     }
 
-    private sealed class StubAutomationInputController : AutomationService.IAutomationInputController
+    private sealed class StubAutomationInputController : IAutomationInputController
     {
         public List<Point> MoveTargets { get; } = [];
 
@@ -937,7 +937,7 @@ public sealed class AutomationServiceTests
         ushort? SecondModifierVirtualKey,
         ushort VirtualKey);
 
-    private sealed class StubAutomationClock : AutomationService.IAutomationClock
+    private sealed class StubAutomationClock : IAutomationClock
     {
         private DateTime m_UtcNow = new(2026, 4, 22, 12, 0, 0, DateTimeKind.Utc);
 
@@ -999,7 +999,7 @@ public sealed class AutomationServiceTests
 
     private static Mat LoadPlayButtonImage()
     {
-        using var bitmap = Discovery.Properties.Resources.play;
+        using var bitmap = Properties.Resources.play;
         using var memoryStream = new MemoryStream();
         bitmap.Save(memoryStream, ImageFormat.Png);
         return Cv2.ImDecode(memoryStream.ToArray(), ImreadModes.Color);

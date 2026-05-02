@@ -95,7 +95,7 @@ internal sealed class SampleImageProcessor
         new Scalar(80, 180, 255),
         new Scalar(255, 120, 120)
     ];
-    private static readonly Serilog.ILogger Logger = Log.ForContext<SampleImageProcessor>();
+    private static readonly ILogger Logger = Log.ForContext<SampleImageProcessor>();
 
     private readonly PlayfieldDetector m_PlayfieldDetector = new();
     private readonly KnownSampleMatcher m_KnownSampleMatcher;
@@ -176,7 +176,7 @@ internal sealed class SampleImageProcessor
         }
 
         var playfieldDetection = m_PlayfieldDetector.Detect(image);
-        IReadOnlyList<Point[]> polygons = Array.Empty<Point[]>();
+        IReadOnlyList<Point[]> polygons;
         var usedKnownSampleTemplate = false;
         string? matchedSampleFileName = null;
 

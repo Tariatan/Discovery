@@ -18,9 +18,9 @@ public partial class MainWindow
     private const uint VirtualKeyF11 = 0x7A;
     private static readonly Brush StartBrush = new SolidColorBrush(Color.FromRgb(0x2C, 0xB4, 0x3A));
     private static readonly Brush StopBrush = new SolidColorBrush(Color.FromRgb(0xD1, 0x34, 0x34));
-    private static readonly Serilog.ILogger Logger = Log.ForContext<MainWindow>();
+    private static readonly ILogger Logger = Log.ForContext<MainWindow>();
 
-    private readonly AutomationService m_AutomationService = new();
+    private readonly ProjectDiscoveryAutomationService m_ProjectDiscoveryAutomationService = new();
     private HwndSource? m_WindowSource;
     private CancellationTokenSource? m_AutomationCancellationSource;
     private bool m_IsAutomationRunning;
@@ -78,7 +78,7 @@ public partial class MainWindow
         {
             Logger.Information("Checking launcher startup automation. InitialPilotIndex={InitialPilotIndex}", initialPilotIndex);
             var startupSummary = await Task.Run(
-                () => m_AutomationService.PrepareAutomationFromLauncherStartup(initialPilotIndex, cancellationSource.Token),
+                () => m_ProjectDiscoveryAutomationService.PrepareAutomationFromLauncherStartup(initialPilotIndex, cancellationSource.Token),
                 cancellationSource.Token);
             Logger.Information(
                 "Launcher startup automation prepared. ShouldStartAutomation={ShouldStartAutomation}, PlayButtonFound={PlayButtonFound}, PilotLocated={PilotLocated}, PlayCapturePath={PlayCapturePath}, PilotCapturePath={PilotCapturePath}",
@@ -130,7 +130,7 @@ public partial class MainWindow
         try
         {
             var automationTask = Task.Run(
-                () => m_AutomationService.AutomateCurrentScreen(dpi, initialPilotIndex, cancellationSource.Token),
+                () => m_ProjectDiscoveryAutomationService.AutomateCurrentScreen(dpi, initialPilotIndex, cancellationSource.Token),
                 cancellationSource.Token);
             var summary = await automationTask;
             Logger.Information(
@@ -275,7 +275,7 @@ public partial class MainWindow
     private void ApplyDebugImageRetention()
     {
         var keepDebugImages = DebugCheckBox.IsChecked == true;
-        m_AutomationService.KeepDebugImages = keepDebugImages;
+        m_ProjectDiscoveryAutomationService.KeepDebugImages = keepDebugImages;
         Logger.Information("Debug image retention set. KeepDebugImages={KeepDebugImages}", keepDebugImages);
     }
 
@@ -312,6 +312,6 @@ public partial class MainWindow
     private void Samples_Click(object sender, RoutedEventArgs e)
     {
         Logger.Information("Sample processing requested from main window.");
-        m_AutomationService.ProcessSamples();
+        m_ProjectDiscoveryAutomationService.ProcessSamples();
     }
 }

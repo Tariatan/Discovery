@@ -16,7 +16,7 @@ internal sealed class ScreenCaptureService
     private const int VirtualScreenTopMetric = 77;
     private const int VirtualScreenWidthMetric = 78;
     private const int VirtualScreenHeightMetric = 79;
-    private static readonly Serilog.ILogger Logger = Log.ForContext<ScreenCaptureService>();
+    private static readonly ILogger Logger = Log.ForContext<ScreenCaptureService>();
 
     private readonly IScreenCaptureProvider m_ScreenCaptureProvider;
     private readonly SampleImageProcessor m_SampleImageProcessor;
