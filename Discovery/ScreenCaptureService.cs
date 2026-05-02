@@ -2,6 +2,7 @@ using System.Drawing;
 using System.Drawing.Imaging;
 using System.IO;
 using System.Runtime.InteropServices;
+using Serilog;
 
 namespace Discovery;
 
@@ -15,6 +16,7 @@ internal sealed class ScreenCaptureService
     private const int VirtualScreenTopMetric = 77;
     private const int VirtualScreenWidthMetric = 78;
     private const int VirtualScreenHeightMetric = 79;
+    private static readonly Serilog.ILogger Logger = Log.ForContext<ScreenCaptureService>();
 
     private readonly IScreenCaptureProvider m_ScreenCaptureProvider;
     private readonly SampleImageProcessor m_SampleImageProcessor;
@@ -36,7 +38,11 @@ internal sealed class ScreenCaptureService
 
     public void ProcessSamples()
     {
-        m_SampleImageProcessor.ProcessSamples();
+        var summary = m_SampleImageProcessor.ProcessSamples();
+        Logger.Information(
+            "Processed samples from screen capture service. SamplesDirectory={SamplesDirectory}, ResultCount={ResultCount}",
+            summary.SamplesDirectory,
+            summary.Results.Count);
     }
 
     public ScreenCaptureSummary CaptureAndProcessCurrentScreen()
@@ -51,6 +57,12 @@ internal sealed class ScreenCaptureService
         // for debugging, then process it through the same screenshot pipeline.
         var capturePath = CaptureCurrentScreenTrace();
         var analysis = m_SampleImageProcessor.AnalyzeImageFile(capturePath);
+        Logger.Information(
+            "Captured and analyzed current screen. CapturePath={CapturePath}, PlayfieldFound={PlayfieldFound}, ClusterCount={ClusterCount}, OutputPath={OutputPath}",
+            capturePath,
+            analysis.Result.PlayfieldFound,
+            analysis.Result.ClusterCount,
+            analysis.Result.OutputPath);
 
         return new ScreenCaptureAnalysisSummary(m_CapturesDirectory, capturePath, analysis);
     }
@@ -62,6 +74,7 @@ internal sealed class ScreenCaptureService
             m_CapturesDirectory,
             $"{CaptureFilePrefix}{DateTime.Now.ToString(CaptureTimestampFormat)}{suffix}.png");
         CaptureCurrentScreenToFile(capturePath);
+        Logger.Information("Captured current screen trace. CapturePath={CapturePath}", capturePath);
         return capturePath;
     }
 
@@ -69,6 +82,7 @@ internal sealed class ScreenCaptureService
     {
         Directory.CreateDirectory(Path.GetDirectoryName(outputPath)!);
         m_ScreenCaptureProvider.CaptureToFile(outputPath);
+        Logger.Debug("Captured current screen to file. OutputPath={OutputPath}", outputPath);
     }
 
     internal SampleImageAnalysisResult AnalyzeImageFile(string imagePath, bool writeAnnotatedOutput = true)

@@ -3,6 +3,7 @@ using System.Windows;
 using System.Windows.Interop;
 using System.Windows.Media;
 using Discovery.Properties;
+using Serilog;
 
 namespace Discovery;
 
@@ -17,11 +18,11 @@ public partial class MainWindow
     private const uint VirtualKeyF11 = 0x7A;
     private static readonly Brush StartBrush = new SolidColorBrush(Color.FromRgb(0x2C, 0xB4, 0x3A));
     private static readonly Brush StopBrush = new SolidColorBrush(Color.FromRgb(0xD1, 0x34, 0x34));
+    private static readonly Serilog.ILogger Logger = Log.ForContext<MainWindow>();
 
     private readonly AutomationService m_AutomationService = new();
     private HwndSource? m_WindowSource;
     private CancellationTokenSource? m_AutomationCancellationSource;
-    private Task? m_AutomationTask;
     private bool m_IsAutomationRunning;
 
     public MainWindow()
@@ -31,6 +32,7 @@ public partial class MainWindow
         SourceInitialized += MainWindow_SourceInitialized;
         Loaded += MainWindow_Loaded;
         Closed += MainWindow_Closed;
+        Logger.Information("Main window initialized.");
     }
 
     private async void Automate_Click(object sender, RoutedEventArgs e)
@@ -42,11 +44,14 @@ public partial class MainWindow
 
         if (m_IsAutomationRunning)
         {
+            Logger.Information("Stop requested from automation button.");
             StopAutomation();
             return;
         }
 
-        await StartAutomationAsync(GetPilotIndex(), new CancellationTokenSource());
+        var initialPilotIndex = GetPilotIndex();
+        Logger.Information("Start requested from automation button. InitialPilotIndex={InitialPilotIndex}", initialPilotIndex);
+        await StartAutomationAsync(initialPilotIndex, new CancellationTokenSource());
     }
 
     private async void MainWindow_Loaded(object sender, RoutedEventArgs e)
@@ -70,9 +75,17 @@ public partial class MainWindow
 
         try
         {
+            Logger.Information("Checking launcher startup automation. InitialPilotIndex={InitialPilotIndex}", initialPilotIndex);
             var startupSummary = await Task.Run(
                 () => m_AutomationService.PrepareAutomationFromLauncherStartup(initialPilotIndex, cancellationSource.Token),
                 cancellationSource.Token);
+            Logger.Information(
+                "Launcher startup automation prepared. ShouldStartAutomation={ShouldStartAutomation}, PlayButtonFound={PlayButtonFound}, PilotLocated={PilotLocated}, PlayCapturePath={PlayCapturePath}, PilotCapturePath={PilotCapturePath}",
+                startupSummary.ShouldStartAutomation,
+                startupSummary.PlayButtonFound,
+                startupSummary.PilotLocated,
+                startupSummary.PlayButtonCapturePath,
+                startupSummary.PilotCapturePath);
             if (!startupSummary.ShouldStartAutomation)
             {
                 return;
@@ -83,6 +96,7 @@ public partial class MainWindow
         }
         catch (OperationCanceledException)
         {
+            Logger.Information("Launcher startup automation was canceled.");
         }
         finally
         {
@@ -105,16 +119,36 @@ public partial class MainWindow
         SetPilotIndexControlsEnabled(isEnabled: false);
         m_AutomationCancellationSource = cancellationSource;
         var dpi = VisualTreeHelper.GetDpi(this);
+        Logger.Information(
+            "Automation started. InitialPilotIndex={InitialPilotIndex}, DpiScaleX={DpiScaleX}, DpiScaleY={DpiScaleY}",
+            initialPilotIndex,
+            dpi.DpiScaleX,
+            dpi.DpiScaleY);
 
         try
         {
-            m_AutomationTask = Task.Run(
+            var automationTask = Task.Run(
                 () => m_AutomationService.AutomateCurrentScreen(dpi, initialPilotIndex, cancellationSource.Token),
                 cancellationSource.Token);
-            await m_AutomationTask;
+            var summary = await automationTask;
+            Logger.Information(
+                "Automation completed. CapturePath={CapturePath}, FocusedCapturePath={FocusedCapturePath}, ClickedPointCount={ClickedPointCount}, MaximumSubmissionsReached={MaximumSubmissionsReached}, CurrentPilotIndex={CurrentPilotIndex}, TargetPilotIndex={TargetPilotIndex}, PilotSwitchSucceeded={PilotSwitchSucceeded}",
+                summary.CaptureSummary.CapturePath,
+                summary.FocusedCapturePath,
+                summary.ClickedPointCount,
+                summary.MaximumSubmissionsReached,
+                summary.CurrentPilotIndex,
+                summary.TargetPilotIndex,
+                summary.PilotSwitchSucceeded);
         }
         catch (OperationCanceledException)
         {
+            Logger.Information("Automation was canceled.");
+        }
+        catch (Exception exception)
+        {
+            Logger.Error(exception, "Automation failed.");
+            throw;
         }
         finally
         {
@@ -124,7 +158,6 @@ public partial class MainWindow
                 m_AutomationCancellationSource = null;
             }
 
-            m_AutomationTask = null;
             m_IsAutomationRunning = false;
             SetStartButtonState(isRunning: false);
             SetStartButtonEnabled(isEnabled: true);
@@ -145,12 +178,16 @@ public partial class MainWindow
             VirtualKeyF11);
         if (!registered)
         {
+            Logger.Error("Could not register global hotkey Shift+Alt+F11.");
             throw new InvalidOperationException("Could not register global hotkey Shift+Alt+F11.");
         }
+
+        Logger.Information("Registered global hotkey Shift+Alt+F11.");
     }
 
     private void MainWindow_Closed(object? sender, EventArgs e)
     {
+        Logger.Information("Main window closing.");
         StopAutomation();
         Settings.Default.FormLocation = new Point(Left, Top);
         Settings.Default.Save();
@@ -177,6 +214,7 @@ public partial class MainWindow
         if (message == WindowMessageHotKey && wParam.ToInt32() == HotKeyId)
         {
             handled = true;
+            Logger.Information("Global hotkey activated.");
             Automate_Click(this, new RoutedEventArgs());
         }
 
@@ -204,6 +242,11 @@ public partial class MainWindow
 
     private void StopAutomation()
     {
+        if (m_AutomationCancellationSource is not null)
+        {
+            Logger.Information("Automation cancellation requested.");
+        }
+
         m_AutomationCancellationSource?.Cancel();
         m_IsAutomationRunning = false;
         SetStartButtonState(isRunning: false);
@@ -258,6 +301,7 @@ public partial class MainWindow
 
     private void Samples_Click(object sender, RoutedEventArgs e)
     {
+        Logger.Information("Sample processing requested from main window.");
         m_AutomationService.ProcessSamples();
     }
 }

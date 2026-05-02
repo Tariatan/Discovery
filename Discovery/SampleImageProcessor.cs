@@ -1,5 +1,6 @@
 using System.IO;
 using OpenCvSharp;
+using Serilog;
 
 namespace Discovery;
 
@@ -94,6 +95,7 @@ internal sealed class SampleImageProcessor
         new Scalar(80, 180, 255),
         new Scalar(255, 120, 120)
     ];
+    private static readonly Serilog.ILogger Logger = Log.ForContext<SampleImageProcessor>();
 
     private readonly PlayfieldDetector m_PlayfieldDetector = new();
     private readonly KnownSampleMatcher m_KnownSampleMatcher;
@@ -122,6 +124,7 @@ internal sealed class SampleImageProcessor
     public SampleProcessingSummary ProcessSamples()
     {
         var samplesDirectory = SamplesFolderName;
+        Logger.Information("Sample processing started. SamplesDirectory={SamplesDirectory}", samplesDirectory);
         if (!Directory.Exists(samplesDirectory))
         {
             throw new DirectoryNotFoundException($"Samples folder was not found: {samplesDirectory}");
@@ -146,6 +149,10 @@ internal sealed class SampleImageProcessor
             results.Add(ProcessImageFile(sampleFile));
         }
 
+        Logger.Information(
+            "Sample processing finished. SamplesDirectory={SamplesDirectory}, ResultCount={ResultCount}",
+            samplesDirectory,
+            results.Count);
         return new SampleProcessingSummary(samplesDirectory, results);
     }
 
@@ -164,6 +171,7 @@ internal sealed class SampleImageProcessor
         using var image = Cv2.ImRead(imagePath);
         if (image.Empty())
         {
+            Logger.Error("Could not read image. ImagePath={ImagePath}", imagePath);
             throw new InvalidOperationException($"Could not read image: {imagePath}");
         }
 
@@ -223,6 +231,14 @@ internal sealed class SampleImageProcessor
             playfieldDetection.IsFound,
             polygons.Count,
             outputPath);
+        Logger.Information(
+            "Analyzed image. ImagePath={ImagePath}, PlayfieldFound={PlayfieldFound}, ClusterCount={ClusterCount}, OutputPath={OutputPath}, UsedKnownSampleTemplate={UsedKnownSampleTemplate}, MatchedSampleFileName={MatchedSampleFileName}",
+            imagePath,
+            result.PlayfieldFound,
+            result.ClusterCount,
+            result.OutputPath,
+            usedKnownSampleTemplate,
+            matchedSampleFileName);
 
         return new SampleImageAnalysisResult(result, playfieldDetection, polygons);
     }

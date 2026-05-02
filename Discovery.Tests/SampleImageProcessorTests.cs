@@ -599,7 +599,7 @@ public sealed class SampleImageProcessorTests
         using var firstInput = OpenCvSharp.InputArray.Create(polygons[0]);
         using var secondInput = OpenCvSharp.InputArray.Create(polygons[1]);
         using var overlapPolygon = new OpenCvSharp.Mat();
-        var overlapArea = Cv2.IntersectConvexConvex(firstInput, secondInput, overlapPolygon, true);
+        var overlapArea = Cv2.IntersectConvexConvex(firstInput, secondInput, overlapPolygon);
         Assert.True(overlapArea <= 1.0);
     }
 
@@ -713,7 +713,7 @@ public sealed class SampleImageProcessorTests
         using var firstInput = OpenCvSharp.InputArray.Create(polygons[0]);
         using var secondInput = OpenCvSharp.InputArray.Create(polygons[1]);
         using var overlapPolygon = new OpenCvSharp.Mat();
-        var overlapArea = Cv2.IntersectConvexConvex(firstInput, secondInput, overlapPolygon, true);
+        var overlapArea = Cv2.IntersectConvexConvex(firstInput, secondInput, overlapPolygon);
         Assert.True(overlapArea <= 1.0);
     }
 
@@ -923,7 +923,7 @@ public sealed class SampleImageProcessorTests
         using var firstInput = OpenCvSharp.InputArray.Create(polygons[0]);
         using var secondInput = OpenCvSharp.InputArray.Create(polygons[1]);
         using var overlapPolygon = new OpenCvSharp.Mat();
-        var overlapArea = Cv2.IntersectConvexConvex(firstInput, secondInput, overlapPolygon, true);
+        var overlapArea = Cv2.IntersectConvexConvex(firstInput, secondInput, overlapPolygon);
         Assert.True(overlapArea <= 1.0);
     }
 

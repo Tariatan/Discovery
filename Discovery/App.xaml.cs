@@ -1,4 +1,6 @@
 using System.Windows;
+using System.Windows.Threading;
+using Serilog;
 
 namespace Discovery;
 
@@ -6,22 +8,54 @@ public partial class App
 {
     protected override void OnStartup(StartupEventArgs e)
     {
-        if (e.Args.Contains("--process-samples", StringComparer.OrdinalIgnoreCase))
-        {
-            RunSampleProcessing();
-            Shutdown();
-            return;
-        }
+        var logFilePath = ApplicationLogging.Configure();
+        Log.ForContext<App>().Information(
+            "Discovery started. LogFilePath={LogFilePath}, Arguments={Arguments}",
+            logFilePath,
+            e.Args);
 
-        var window = new MainWindow();
-        window.Show();
-        base.OnStartup(e);
+        try
+        {
+            if (e.Args.Contains("--process-samples", StringComparer.OrdinalIgnoreCase))
+            {
+                RunSampleProcessing();
+                Shutdown();
+                return;
+            }
+
+            var window = new MainWindow();
+            window.Show();
+            base.OnStartup(e);
+        }
+        catch (Exception exception)
+        {
+            Log.ForContext<App>().Fatal(exception, "Discovery startup failed.");
+            throw;
+        }
+    }
+
+    protected override void OnExit(ExitEventArgs e)
+    {
+        try
+        {
+            Log.ForContext<App>().Information("Discovery exited. ExitCode={ExitCode}", e.ApplicationExitCode);
+        }
+        finally
+        {
+            Log.CloseAndFlush();
+            base.OnExit(e);
+        }
     }
 
     private static void RunSampleProcessing()
     {
+        Log.ForContext<App>().Information("Command-line sample processing started.");
         var processor = new SampleImageProcessor();
         var summary = processor.ProcessSamples();
+        Log.ForContext<App>().Information(
+            "Command-line sample processing finished. SamplesDirectory={SamplesDirectory}, ResultCount={ResultCount}",
+            summary.SamplesDirectory,
+            summary.Results.Count);
 
         Console.WriteLine($"Samples folder: {summary.SamplesDirectory}");
 

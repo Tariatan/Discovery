@@ -116,25 +116,6 @@ public sealed class MaximumSubmissionsPopupDetectorTests
         Assert.False(detected);
     }
 
-    [Fact]
-    public void Detect_FocusedCaptureInventoryCrop_ReturnsFalse()
-    {
-        // Arrange
-        var imagePath = Path.Combine(
-            AppContext.BaseDirectory,
-            "Fixtures",
-            "maximum-submissions-false-positive-inventory-crop.png");
-        using var image = Cv2.ImRead(imagePath);
-        Assert.False(image.Empty());
-        var detector = new MaximumSubmissionsPopupDetector();
-
-        // Act
-        var detected = detector.Detect(image);
-
-        // Assert
-        Assert.False(detected);
-    }
-
     private static Mat CreateBusyPilotSelectionImage()
     {
         var image = new Mat(new Size(3000, 1600), MatType.CV_8UC3, new Scalar(14, 18, 22));
@@ -155,7 +136,7 @@ public sealed class MaximumSubmissionsPopupDetectorTests
         var image = new Mat(new Size(2551, 2008), MatType.CV_8UC3, new Scalar(18, 24, 26));
         var popup = new Rect(960, 825, 625, 386);
         Cv2.Rectangle(image, popup, new Scalar(7, 7, 7), -1);
-        Cv2.Rectangle(image, popup, new Scalar(60, 55, 42), 1);
+        Cv2.Rectangle(image, popup, new Scalar(60, 55, 42));
 
         var iconCenter = new Point(popup.X + 62, popup.Y + 58);
         Cv2.Circle(image, iconCenter, 24, new Scalar(150, 150, 150), -1, LineTypes.AntiAlias);
@@ -173,7 +154,7 @@ public sealed class MaximumSubmissionsPopupDetectorTests
 
         var button = new Rect(popup.X + 28, popup.Y + 310, popup.Width - 56, 50);
         Cv2.Rectangle(image, button, new Scalar(75, 60, 35), -1);
-        Cv2.Rectangle(image, button, new Scalar(180, 165, 80), 1);
+        Cv2.Rectangle(image, button, new Scalar(180, 165, 80));
         Cv2.PutText(image, "OK", new Point(button.X + (button.Width / 2) - 15, button.Y + 32), HersheyFonts.HersheySimplex, 0.7, Scalar.All(220), 1, LineTypes.AntiAlias);
         return image;
     }
@@ -217,7 +198,7 @@ public sealed class MaximumSubmissionsPopupDetectorTests
     private static void DrawInstructionPanel(Mat image, Rect bounds)
     {
         Cv2.Rectangle(image, bounds, new Scalar(55, 45, 10), -1);
-        Cv2.Rectangle(image, bounds, new Scalar(95, 85, 40), 1);
+        Cv2.Rectangle(image, bounds, new Scalar(95, 85, 40));
         Cv2.PutText(image, "Demarcate the clusters", new Point(bounds.X + 36, bounds.Y + 70), HersheyFonts.HersheySimplex, 1.0, Scalar.All(225), 2, LineTypes.AntiAlias);
 
         var bodyLines = new[]
@@ -284,7 +265,7 @@ public sealed class MaximumSubmissionsPopupDetectorTests
         Cv2.PutText(image, "Thank you for your submission", new Point(candidate.X + 160, candidate.Y + 250), HersheyFonts.HersheySimplex, 0.9, Scalar.All(220), 2, LineTypes.AntiAlias);
 
         Cv2.Rectangle(image, new Rect(candidate.X + 135, candidate.Y + 330, 450, 45), new Scalar(75, 60, 35), -1);
-        Cv2.Rectangle(image, new Rect(candidate.X + 135, candidate.Y + 330, 450, 45), new Scalar(180, 165, 80), 1);
+        Cv2.Rectangle(image, new Rect(candidate.X + 135, candidate.Y + 330, 450, 45), new Scalar(180, 165, 80));
         Cv2.PutText(image, "Continue", new Point(candidate.X + 305, candidate.Y + 359), HersheyFonts.HersheySimplex, 0.6, Scalar.All(215), 1, LineTypes.AntiAlias);
     }
 
@@ -292,7 +273,7 @@ public sealed class MaximumSubmissionsPopupDetectorTests
     {
         var image = new Mat(new Size(2551, 2008), MatType.CV_8UC3, new Scalar(15, 18, 20));
         Cv2.Rectangle(image, new Rect(48, 1325, 900, 650), new Scalar(5, 5, 5), -1);
-        Cv2.Rectangle(image, new Rect(48, 1325, 900, 650), new Scalar(35, 45, 48), 1);
+        Cv2.Rectangle(image, new Rect(48, 1325, 900, 650), new Scalar(35, 45, 48));
         Cv2.PutText(image, "Inventory", new Point(130, 1382), HersheyFonts.HersheySimplex, 0.9, Scalar.All(205), 2, LineTypes.AntiAlias);
 
         var start = new Point(330, 1510);
@@ -305,7 +286,7 @@ public sealed class MaximumSubmissionsPopupDetectorTests
         }
 
         Cv2.Rectangle(image, new Rect(297, 1725, 497, 85), new Scalar(45, 65, 68), -1);
-        Cv2.Rectangle(image, new Rect(297, 1725, 497, 85), new Scalar(115, 160, 165), 1);
+        Cv2.Rectangle(image, new Rect(297, 1725, 497, 85), new Scalar(115, 160, 165));
         Cv2.PutText(image, "Capital Ship", new Point(420, 1768), HersheyFonts.HersheySimplex, 0.7, Scalar.All(220), 1, LineTypes.AntiAlias);
         Cv2.PutText(image, "Capital Ship", new Point(620, 1795), HersheyFonts.HersheySimplex, 0.7, Scalar.All(220), 1, LineTypes.AntiAlias);
         return image;

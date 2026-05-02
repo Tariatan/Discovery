@@ -9,13 +9,6 @@ internal sealed class PilotAvatarLocator
     private const double MinimumMatchScore = 0.90;
     private static readonly double[] TemplateScales = [1.0, 0.95, 1.05, 0.90, 1.10];
 
-    public int GetNextPilotIndex(int currentPilotIndex)
-    {
-        return TryGetNextPilotIndex(currentPilotIndex, out var nextPilotIndex)
-            ? nextPilotIndex
-            : GetFirstPilotIndex();
-    }
-
     public bool TryGetNextPilotIndex(int currentPilotIndex, out int nextPilotIndex)
     {
         var availablePilotIndices = GetAvailablePilotIndices();
@@ -83,14 +76,6 @@ internal sealed class PilotAvatarLocator
             .Distinct()
             .Order()
             .ToArray();
-    }
-
-    private static int GetFirstPilotIndex()
-    {
-        var availablePilotIndices = GetAvailablePilotIndices();
-        return availablePilotIndices.Count == 0
-            ? 1
-            : availablePilotIndices[0];
     }
 
     private static int ParsePilotIndex(string? fileNameWithoutExtension)

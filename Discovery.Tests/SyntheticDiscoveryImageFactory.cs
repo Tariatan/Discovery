@@ -196,7 +196,7 @@ internal static class SyntheticDiscoveryImageFactory
             (int)Math.Round(image.Width * 0.36),
             (int)Math.Round(image.Height * 0.29));
         Cv2.Rectangle(image, popup, new Scalar(7, 7, 7), -1);
-        Cv2.Rectangle(image, popup, new Scalar(75, 65, 45), 1);
+        Cv2.Rectangle(image, popup, new Scalar(75, 65, 45));
 
         var iconCenter = new OpenCvSharp.Point(
             popup.X + (int)Math.Round(popup.Width * 0.10),
@@ -230,7 +230,7 @@ internal static class SyntheticDiscoveryImageFactory
             (int)Math.Round(popup.Width * 0.90),
             (int)Math.Round(popup.Height * 0.12));
         Cv2.Rectangle(image, button, new Scalar(78, 63, 35), -1);
-        Cv2.Rectangle(image, button, new Scalar(190, 170, 80), 1);
+        Cv2.Rectangle(image, button, new Scalar(190, 170, 80));
         Cv2.PutText(
             image,
             "OK",
