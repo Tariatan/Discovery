@@ -68,6 +68,13 @@ internal static class SyntheticDiscoveryImageFactory
         return image;
     }
 
+    public static Mat CreateSlowDownPopupImage()
+    {
+        var image = new Mat(new Size(2551, 2008), MatType.CV_8UC3, new Scalar(18, 24, 26));
+        DrawSlowDownPopup(image);
+        return image;
+    }
+
     public static Mat CreateWideScreenMaximumSubmissionsPopupImage()
     {
         var image = new Mat(new Size(3000, 1600), MatType.CV_8UC3, new Scalar(12, 14, 16));
@@ -116,6 +123,12 @@ internal static class SyntheticDiscoveryImageFactory
     public static void WriteMaximumSubmissionsPopupImageWithPlayfield(string outputPath)
     {
         using var image = CreateMaximumSubmissionsPopupImageWithPlayfield();
+        Cv2.ImWrite(outputPath, image);
+    }
+
+    public static void WriteSlowDownPopupImage(string outputPath)
+    {
+        using var image = CreateSlowDownPopupImage();
         Cv2.ImWrite(outputPath, image);
     }
 
@@ -240,6 +253,43 @@ internal static class SyntheticDiscoveryImageFactory
             Scalar.All(220),
             1,
             LineTypes.AntiAlias);
+    }
+
+    private static void DrawSlowDownPopup(Mat image)
+    {
+        var popup = new Rect(
+            (int)Math.Round(image.Width * 0.56),
+            (int)Math.Round(image.Height * 0.62),
+            (int)Math.Round(image.Width * 0.36),
+            (int)Math.Round(image.Height * 0.29));
+        Cv2.Rectangle(image, popup, new Scalar(7, 7, 7), -1);
+        Cv2.Rectangle(image, popup, new Scalar(60, 55, 42));
+
+        var iconCenter = new Point(
+            popup.X + (int)Math.Round(popup.Width * 0.10),
+            popup.Y + (int)Math.Round(popup.Height * 0.16));
+        Cv2.Circle(image, iconCenter, 24, new Scalar(150, 150, 150), -1, LineTypes.AntiAlias);
+        Cv2.PutText(image, "i", new Point(iconCenter.X - 5, iconCenter.Y + 11), HersheyFonts.HersheyDuplex, 1.0, new Scalar(25, 25, 25), 2, LineTypes.AntiAlias);
+
+        var titleLeft = popup.X + (int)Math.Round(popup.Width * 0.20);
+        var titleTop = popup.Y + (int)Math.Round(popup.Height * 0.12);
+        Cv2.PutText(image, "Slow Down", new Point(titleLeft, titleTop), HersheyFonts.HersheySimplex, 1.25, Scalar.All(235), 3, LineTypes.AntiAlias);
+
+        var bodyLeft = popup.X + (int)Math.Round(popup.Width * 0.04);
+        var bodyTop = popup.Y + (int)Math.Round(popup.Height * 0.36);
+        Cv2.PutText(image, "We cannot produce more than five submissions a minute, nor", new Point(bodyLeft, bodyTop), HersheyFonts.HersheySimplex, 0.68, Scalar.All(220), 2, LineTypes.AntiAlias);
+        Cv2.PutText(image, "should we. Make sure you're taking time to carefully analyze", new Point(bodyLeft, bodyTop + 30), HersheyFonts.HersheySimplex, 0.68, Scalar.All(220), 2, LineTypes.AntiAlias);
+        Cv2.PutText(image, "each sample. A prolific researcher is a good researcher, but", new Point(bodyLeft, bodyTop + 60), HersheyFonts.HersheySimplex, 0.68, Scalar.All(220), 2, LineTypes.AntiAlias);
+        Cv2.PutText(image, "only if they produce quality work.", new Point(bodyLeft, bodyTop + 90), HersheyFonts.HersheySimplex, 0.68, Scalar.All(220), 2, LineTypes.AntiAlias);
+
+        var button = new Rect(
+            popup.X + (int)Math.Round(popup.Width * 0.04),
+            popup.Y + (int)Math.Round(popup.Height * 0.80),
+            (int)Math.Round(popup.Width * 0.90),
+            (int)Math.Round(popup.Height * 0.12));
+        Cv2.Rectangle(image, button, new Scalar(75, 60, 35), -1);
+        Cv2.Rectangle(image, button, new Scalar(180, 165, 80));
+        Cv2.PutText(image, "OK", new Point(button.X + (button.Width / 2) - 15, button.Y + 32), HersheyFonts.HersheySimplex, 0.7, Scalar.All(220), 1, LineTypes.AntiAlias);
     }
 
     private readonly record struct ClusterDefinition(Point Center, Size Size, Scalar Color);

@@ -1,4 +1,5 @@
 using OpenCvSharp;
+using DrawingRectangle = System.Drawing.Rectangle;
 
 namespace Automaton.Tests;
 
@@ -64,6 +65,45 @@ public sealed class ScreenCaptureServiceTests
         Assert.True(File.Exists(Path.Combine(workspace.Path, summary.Result.OutputPath)));
         Assert.False(summary.Result.PlayfieldFound);
         Assert.Equal(2, summary.Result.ClusterCount);
+    }
+
+    [Fact]
+    public void BuildGameCaptureBounds_VirtualScreenLargerThanGameViewport_ReturnsLeftGameViewport()
+    {
+        // Arrange
+        var virtualScreenBounds = new DrawingRectangle(0, 0, 7680, 2160);
+
+        // Act
+        var captureBounds = ScreenCaptureService.BuildGameCaptureBounds(virtualScreenBounds);
+
+        // Assert
+        Assert.Equal(new DrawingRectangle(0, 0, 2560, 2160), captureBounds);
+    }
+
+    [Fact]
+    public void BuildGameCaptureBounds_VirtualScreenSmallerThanGameViewport_ClampsToVirtualScreen()
+    {
+        // Arrange
+        var virtualScreenBounds = new DrawingRectangle(0, 0, 1920, 1080);
+
+        // Act
+        var captureBounds = ScreenCaptureService.BuildGameCaptureBounds(virtualScreenBounds);
+
+        // Assert
+        Assert.Equal(virtualScreenBounds, captureBounds);
+    }
+
+    [Fact]
+    public void BuildGameCaptureBounds_GameViewportOutsideVirtualScreen_FallsBackToVirtualScreen()
+    {
+        // Arrange
+        var virtualScreenBounds = new DrawingRectangle(3000, 0, 1920, 1080);
+
+        // Act
+        var captureBounds = ScreenCaptureService.BuildGameCaptureBounds(virtualScreenBounds);
+
+        // Assert
+        Assert.Equal(virtualScreenBounds, captureBounds);
     }
 
     private static void CreateBlankCapture(string outputPath)

@@ -21,18 +21,22 @@ public partial class MainWindow
     private static readonly ILogger Logger = Log.ForContext<MainWindow>();
 
     private readonly ProjectDiscoveryAutomationService m_ProjectDiscoveryAutomationService = new();
+    private readonly MiningAutomationService m_MiningAutomationService = new();
+    private readonly ApplicationAutomationMode m_AutomationMode;
     private HwndSource? m_WindowSource;
     private CancellationTokenSource? m_AutomationCancellationSource;
     private bool m_IsAutomationRunning;
 
-    public MainWindow()
+    public MainWindow(ApplicationAutomationMode automationMode = ApplicationAutomationMode.ProjectDiscovery)
     {
+        m_AutomationMode = automationMode;
         InitializeComponent();
+        ApplyAutomationMode();
         RestoreWindowPosition();
         SourceInitialized += MainWindow_SourceInitialized;
         Loaded += MainWindow_Loaded;
         Closed += MainWindow_Closed;
-        Logger.Information("Main window initialized.");
+        Logger.Information("Main window initialized. AutomationMode={AutomationMode}", m_AutomationMode);
     }
 
     private async void Automate_Click(object sender, RoutedEventArgs e)
@@ -49,9 +53,16 @@ public partial class MainWindow
             return;
         }
 
+        if (m_AutomationMode == ApplicationAutomationMode.Mining)
+        {
+            Logger.Information("Start requested from automation button. AutomationMode={AutomationMode}", m_AutomationMode);
+            await StartMiningAutomationAsync(new CancellationTokenSource());
+            return;
+        }
+
         var initialPilotIndex = GetPilotIndex();
         Logger.Information("Start requested from automation button. InitialPilotIndex={InitialPilotIndex}", initialPilotIndex);
-        await StartAutomationAsync(initialPilotIndex, new CancellationTokenSource());
+        await StartProjectDiscoveryAutomationAsync(initialPilotIndex, new CancellationTokenSource());
     }
 
     private async void MainWindow_Loaded(object sender, RoutedEventArgs e)
@@ -64,6 +75,13 @@ public partial class MainWindow
     {
         if (m_IsAutomationRunning)
         {
+            return;
+        }
+
+        if (m_AutomationMode == ApplicationAutomationMode.Mining)
+        {
+            Logger.Information("Starting mining automation from startup argument.");
+            await StartMiningAutomationAsync(new CancellationTokenSource());
             return;
         }
 
@@ -92,7 +110,7 @@ public partial class MainWindow
                 return;
             }
 
-            await StartAutomationAsync(initialPilotIndex, cancellationSource);
+            await StartProjectDiscoveryAutomationAsync(initialPilotIndex, cancellationSource);
             cancellationSource = null;
         }
         catch (OperationCanceledException)
@@ -112,7 +130,7 @@ public partial class MainWindow
         }
     }
 
-    private async Task StartAutomationAsync(int initialPilotIndex, CancellationTokenSource cancellationSource)
+    private async Task StartProjectDiscoveryAutomationAsync(int initialPilotIndex, CancellationTokenSource cancellationSource)
     {
         ApplyDebugImageRetention();
         m_IsAutomationRunning = true;
@@ -134,11 +152,13 @@ public partial class MainWindow
                 cancellationSource.Token);
             var summary = await automationTask;
             Logger.Information(
-                "Automation completed. CapturePath={CapturePath}, FocusedCapturePath={FocusedCapturePath}, ClickedPointCount={ClickedPointCount}, MaximumSubmissionsReached={MaximumSubmissionsReached}, CurrentPilotIndex={CurrentPilotIndex}, TargetPilotIndex={TargetPilotIndex}, PilotSwitchSucceeded={PilotSwitchSucceeded}",
+                "Automation completed. CapturePath={CapturePath}, FocusedCapturePath={FocusedCapturePath}, ClickedPointCount={ClickedPointCount}, MaximumSubmissionsReached={MaximumSubmissionsReached}, SlowDownPopupDetected={SlowDownPopupDetected}, PlayfieldMissingLimitReached={PlayfieldMissingLimitReached}, CurrentPilotIndex={CurrentPilotIndex}, TargetPilotIndex={TargetPilotIndex}, PilotSwitchSucceeded={PilotSwitchSucceeded}",
                 summary.CaptureSummary.CapturePath,
                 summary.FocusedCapturePath,
                 summary.ClickedPointCount,
                 summary.MaximumSubmissionsReached,
+                summary.SlowDownPopupDetected,
+                summary.PlayfieldMissingLimitReached,
                 summary.CurrentPilotIndex,
                 summary.TargetPilotIndex,
                 summary.PilotSwitchSucceeded);
@@ -150,6 +170,56 @@ public partial class MainWindow
         catch (Exception exception)
         {
             Logger.Error(exception, "Automation failed.");
+            throw;
+        }
+        finally
+        {
+            cancellationSource.Dispose();
+            if (ReferenceEquals(m_AutomationCancellationSource, cancellationSource))
+            {
+                m_AutomationCancellationSource = null;
+            }
+
+            m_IsAutomationRunning = false;
+            SetStartButtonState(isRunning: false);
+            SetStartButtonEnabled(isEnabled: true);
+            SetPilotIndexControlsEnabled(isEnabled: true);
+        }
+    }
+
+    private async Task StartMiningAutomationAsync(CancellationTokenSource cancellationSource)
+    {
+        m_IsAutomationRunning = true;
+        SetStartButtonState(isRunning: true);
+        SetStartButtonEnabled(isEnabled: true);
+        SetPilotIndexControlsEnabled(isEnabled: false);
+        m_AutomationCancellationSource = cancellationSource;
+        var dpi = VisualTreeHelper.GetDpi(this);
+        Logger.Information(
+            "Mining automation started. DpiScaleX={DpiScaleX}, DpiScaleY={DpiScaleY}",
+            dpi.DpiScaleX,
+            dpi.DpiScaleY);
+
+        try
+        {
+            var automationTask = Task.Run(
+                () => m_MiningAutomationService.AutomateCurrentScreen(cancellationSource.Token),
+                cancellationSource.Token);
+            var summary = await automationTask;
+            Logger.Information(
+                "Mining automation completed. State={State}, NextState={NextState}, Action={Action}, CapturePath={CapturePath}",
+                summary.State,
+                summary.NextState,
+                summary.Action,
+                summary.CapturePath);
+        }
+        catch (OperationCanceledException)
+        {
+            Logger.Information("Mining automation was canceled.");
+        }
+        catch (Exception exception)
+        {
+            Logger.Error(exception, "Mining automation failed.");
             throw;
         }
         finally
@@ -267,9 +337,11 @@ public partial class MainWindow
 
     private void SetPilotIndexControlsEnabled(bool isEnabled)
     {
-        PilotIndexDecreaseButton.IsEnabled = isEnabled;
-        PilotIndexIncreaseButton.IsEnabled = isEnabled;
-        DebugCheckBox.IsEnabled = isEnabled;
+        var projectDiscoveryControlsEnabled = isEnabled &&
+                                              m_AutomationMode == ApplicationAutomationMode.ProjectDiscovery;
+        PilotIndexDecreaseButton.IsEnabled = projectDiscoveryControlsEnabled;
+        PilotIndexIncreaseButton.IsEnabled = projectDiscoveryControlsEnabled;
+        SamplesButton.IsEnabled = projectDiscoveryControlsEnabled;
     }
 
     private void ApplyDebugImageRetention()
@@ -313,5 +385,15 @@ public partial class MainWindow
     {
         Logger.Information("Sample processing requested from main window.");
         m_ProjectDiscoveryAutomationService.ProcessSamples();
+    }
+
+    private void ApplyAutomationMode()
+    {
+        if (m_AutomationMode == ApplicationAutomationMode.Mining)
+        {
+            Title = "Automaton - Miner";
+        }
+
+        SetPilotIndexControlsEnabled(isEnabled: true);
     }
 }

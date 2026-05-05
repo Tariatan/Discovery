@@ -63,7 +63,8 @@
                   Content="Debug"
                   Foreground="White"
                   VerticalAlignment="Center"
-                  FontWeight="Bold" />
+                  FontWeight="Bold"
+                  IsChecked="True" />
         <Button Grid.Row="2"
                 Grid.Column="0"
                 x:Name="StartButton"

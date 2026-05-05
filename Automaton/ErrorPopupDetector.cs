@@ -2,7 +2,7 @@ using OpenCvSharp;
 
 namespace Automaton;
 
-internal sealed class MaximumSubmissionsPopupDetector
+internal sealed class ErrorPopupDetector
 {
     private const double SearchLeftRatio = 0.56;
     private const double SearchTopRatio = 0.62;
@@ -19,7 +19,12 @@ internal sealed class MaximumSubmissionsPopupDetector
     private const int MinimumBodyTextBands = 3;
     private const int BodyTextBandRowWhiteMinimum = 8;
     private const int MinimumBodyTextBandHeight = 3;
+    private const int TitleTextBandRowWhiteMinimum = 40;
+    private const int MinimumTitleTextBandHeight = 12;
     private const int TitleLineWhiteMinimum = 700;
+    private const int SlowDownTitleWhiteMinimum = 900;
+    private const int SlowDownTitleWhiteMaximum = 2_400;
+    private const int SlowDownTitleSecondHalfWhiteMaximum = 1_600;
     private const double MinimumInformationIconContourArea = 450.0;
     private const double MaximumInformationIconContourArea = 8_000.0;
     private const int MinimumInformationIconContourWidth = 32;
@@ -37,7 +42,8 @@ internal sealed class MaximumSubmissionsPopupDetector
     private const int MinimumPopupCandidateWidth = 480;
     private const int MaximumPopupCandidateWidth = 1_600;
     private const int MinimumPopupCandidateStep = 32;
-    private const string DebugOverlayText = "Maximum submissions popup detected";
+    private const string MaxSubmissionsOverlayText = "Maximum submissions popup detected";
+    private const string SlowDownDebugOverlayText = "Slow down popup detected";
     private const double DebugOverlayTextScale = 0.8;
     private const int DebugOverlayTextThickness = 2;
     private const int DebugOverlayLeftPadding = 30;
@@ -58,17 +64,40 @@ internal sealed class MaximumSubmissionsPopupDetector
     public bool DetectAndDrawDebugOverlay(string imagePath)
     {
         using var image = Cv2.ImRead(imagePath);
-        if (!Detect(image))
+        if (!Detect(image, PopupTitleKind.MaximumSubmissions))
         {
             return false;
         }
 
-        DrawDebugOverlay(image);
+        DrawDebugOverlay(image, MaxSubmissionsOverlayText);
         Cv2.ImWrite(imagePath, image);
         return true;
     }
 
     public bool Detect(Mat image)
+    {
+        return Detect(image, PopupTitleKind.MaximumSubmissions);
+    }
+
+    public bool DetectSlowDownAndDrawDebugOverlay(string imagePath)
+    {
+        using var image = Cv2.ImRead(imagePath);
+        if (!Detect(image, PopupTitleKind.SlowDown))
+        {
+            return false;
+        }
+
+        DrawDebugOverlay(image, SlowDownDebugOverlayText);
+        Cv2.ImWrite(imagePath, image);
+        return true;
+    }
+
+    public bool DetectSlowDown(Mat image)
+    {
+        return Detect(image, PopupTitleKind.SlowDown);
+    }
+
+    private static bool Detect(Mat image, PopupTitleKind titleKind)
     {
         if (image.Empty())
         {
@@ -76,7 +105,7 @@ internal sealed class MaximumSubmissionsPopupDetector
         }
 
         using var masks = PopupEvidenceMasks.Create(image);
-        return BuildCandidateBounds(image.Size()).Any(candidate => ContainsPopupEvidence(masks, candidate));
+        return DetectPopupKind(masks, image.Size()) == titleKind;
     }
 
     private static IEnumerable<Rect> BuildCandidateBounds(Size imageSize)
@@ -124,24 +153,96 @@ internal sealed class MaximumSubmissionsPopupDetector
         return BuildClampedBounds(left, top, right - left, bottom - top, imageSize);
     }
 
-    private static bool ContainsPopupEvidence(PopupEvidenceMasks masks, Rect candidate)
+    private static PopupTitleKind? DetectPopupKind(PopupEvidenceMasks masks, Size imageSize)
     {
+        var maximumSubmissionsCandidate = FindBestPopupCandidate(masks, imageSize, PopupTitleKind.MaximumSubmissions);
+        var slowDownCandidate = FindBestPopupCandidate(masks, imageSize, PopupTitleKind.SlowDown);
+        if (maximumSubmissionsCandidate is null)
+        {
+            return slowDownCandidate is null ? null : PopupTitleKind.SlowDown;
+        }
+
+        if (slowDownCandidate is null)
+        {
+            return PopupTitleKind.MaximumSubmissions;
+        }
+
+        return slowDownCandidate.Value.Score > maximumSubmissionsCandidate.Value.Score
+            ? PopupTitleKind.SlowDown
+            : PopupTitleKind.MaximumSubmissions;
+    }
+
+    private static PopupCandidateEvidence? FindBestPopupCandidate(
+        PopupEvidenceMasks masks,
+        Size imageSize,
+        PopupTitleKind titleKind)
+    {
+        PopupCandidateEvidence? bestCandidate = null;
+        foreach (var candidate in BuildCandidateBounds(imageSize))
+        {
+            if (!TryBuildPopupCandidateEvidence(masks, candidate, out var evidence) ||
+                !HasTitleEvidence(masks, BuildTitleBounds(candidate), titleKind))
+            {
+                continue;
+            }
+
+            if (bestCandidate is null || evidence.Score > bestCandidate.Value.Score)
+            {
+                bestCandidate = evidence;
+            }
+        }
+
+        return bestCandidate;
+    }
+
+    private static bool TryBuildPopupCandidateEvidence(
+        PopupEvidenceMasks masks,
+        Rect candidate,
+        out PopupCandidateEvidence evidence)
+    {
+        evidence = default;
         var buttonBounds = BuildButtonBounds(candidate);
         var buttonWhitePixels = masks.CountWhitePixels(buttonBounds);
-        var buttonEvidenceFound = masks.CountCyanPixels(buttonBounds) >= ButtonCyanMinimum ||
+        var buttonCyanPixels = masks.CountCyanPixels(buttonBounds);
+        var buttonEvidenceFound = buttonCyanPixels >= ButtonCyanMinimum ||
                                   buttonWhitePixels is >= ButtonWhiteMinimum and <= ButtonWhiteMaximum;
         var titleBounds = BuildTitleBounds(candidate);
         var bodyBounds = BuildBodyBounds(candidate);
         var iconBounds = BuildIconBounds(candidate);
-        return HasTitleEvidence(masks, titleBounds) &&
-               HasWhitePixelEvidence(masks, bodyBounds, BodyWhiteMinimum, BodyWhiteMaximumDensity) &&
-               masks.CountWhiteTextBands(bodyBounds) >= MinimumBodyTextBands &&
-               HasInformationIconEvidence(masks, iconBounds) &&
-               masks.GetLargestWhiteContourArea(bodyBounds) <= MaximumBodyWhiteContourArea &&
-               buttonEvidenceFound;
+        var bodyWhitePixels = masks.CountWhitePixels(bodyBounds);
+        var bodyTextBands = masks.CountWhiteTextBands(bodyBounds);
+        if (!HasWhitePixelEvidence(bodyWhitePixels, bodyBounds, BodyWhiteMinimum, BodyWhiteMaximumDensity) ||
+            bodyTextBands < MinimumBodyTextBands ||
+            !HasInformationIconEvidence(masks, iconBounds) ||
+            masks.GetLargestWhiteContourArea(bodyBounds) > MaximumBodyWhiteContourArea ||
+            !buttonEvidenceFound)
+        {
+            return false;
+        }
+
+        var titleWhitePixels = masks.CountWhitePixels(titleBounds);
+        var iconWhitePixels = masks.CountIconPixels(iconBounds);
+        var score = titleWhitePixels +
+                    bodyWhitePixels +
+                    buttonCyanPixels +
+                    buttonWhitePixels +
+                    iconWhitePixels +
+                    (bodyTextBands * 500);
+        evidence = new PopupCandidateEvidence(candidate, score);
+        return true;
     }
 
-    private static bool HasTitleEvidence(PopupEvidenceMasks masks, Rect titleBounds)
+    private static bool HasTitleEvidence(PopupEvidenceMasks masks, Rect titleBounds, PopupTitleKind titleKind)
+    {
+        return titleKind switch
+        {
+            PopupTitleKind.MaximumSubmissions => HasMaximumSubmissionsTitleEvidence(masks, titleBounds),
+            PopupTitleKind.SlowDown => HasSlowDownTitleEvidence(masks, titleBounds),
+            _ => false
+        };
+    }
+
+    private static bool HasMaximumSubmissionsTitleEvidence(PopupEvidenceMasks masks, Rect titleBounds)
     {
         var firstLineBounds = BuildClampedBounds(
             titleBounds.X,
@@ -157,8 +258,25 @@ internal sealed class MaximumSubmissionsPopupDetector
             new Size(titleBounds.Right, titleBounds.Bottom));
 
         return HasWhitePixelEvidence(masks, titleBounds, TitleWhiteMinimum, TitleWhiteMaximumDensity) &&
+               masks.CountWhiteTextBands(titleBounds, TitleTextBandRowWhiteMinimum, MinimumTitleTextBandHeight) == 2 &&
                masks.CountWhitePixels(firstLineBounds) >= TitleLineWhiteMinimum &&
                masks.CountWhitePixels(secondLineBounds) >= TitleLineWhiteMinimum;
+    }
+
+    private static bool HasSlowDownTitleEvidence(PopupEvidenceMasks masks, Rect titleBounds)
+    {
+        var secondLineBounds = BuildClampedBounds(
+            titleBounds.X,
+            titleBounds.Y + titleBounds.Height / 2,
+            titleBounds.Width,
+            titleBounds.Height - titleBounds.Height / 2,
+            new Size(titleBounds.Right, titleBounds.Bottom));
+        var titleWhitePixels = masks.CountWhitePixels(titleBounds);
+        var titleBandCount = masks.CountWhiteTextBands(titleBounds, TitleTextBandRowWhiteMinimum, MinimumTitleTextBandHeight);
+        return titleWhitePixels is >= SlowDownTitleWhiteMinimum and <= SlowDownTitleWhiteMaximum &&
+               titleWhitePixels <= titleBounds.Width * titleBounds.Height * TitleWhiteMaximumDensity &&
+               titleBandCount == 1 &&
+               masks.CountWhitePixels(secondLineBounds) <= SlowDownTitleSecondHalfWhiteMaximum;
     }
 
     private static bool HasInformationIconEvidence(PopupEvidenceMasks masks, Rect iconBounds)
@@ -215,6 +333,15 @@ internal sealed class MaximumSubmissionsPopupDetector
         double maximumWhiteDensity)
     {
         var whitePixels = masks.CountWhitePixels(bounds);
+        return HasWhitePixelEvidence(whitePixels, bounds, minimumWhitePixels, maximumWhiteDensity);
+    }
+
+    private static bool HasWhitePixelEvidence(
+        int whitePixels,
+        Rect bounds,
+        int minimumWhitePixels,
+        double maximumWhiteDensity)
+    {
         var area = Math.Max(1, bounds.Width * bounds.Height);
         return whitePixels >= minimumWhitePixels &&
                whitePixels <= area * maximumWhiteDensity;
@@ -264,11 +391,11 @@ internal sealed class MaximumSubmissionsPopupDetector
         return new Rect(clampedX, clampedY, clampedWidth, clampedHeight);
     }
 
-    private static void DrawDebugOverlay(Mat image)
+    private static void DrawDebugOverlay(Mat image, string text)
     {
         Cv2.PutText(
             image,
-            DebugOverlayText,
+            text,
             new Point(DebugOverlayLeftPadding, DebugOverlayTopPadding),
             HersheyFonts.HersheySimplex,
             DebugOverlayTextScale,
@@ -330,7 +457,7 @@ internal sealed class MaximumSubmissionsPopupDetector
             return CountPixels(m_IconIntegral, bounds);
         }
 
-        public int CountWhiteTextBands(Rect bounds)
+        public int CountWhiteTextBands(Rect bounds, int rowWhiteMinimum = BodyTextBandRowWhiteMinimum, int minimumBandHeight = MinimumBodyTextBandHeight)
         {
             var bands = 0;
             var currentBandHeight = 0;
@@ -338,13 +465,13 @@ internal sealed class MaximumSubmissionsPopupDetector
             for (var row = bounds.Top; row < bounds.Bottom; row++)
             {
                 var rowWhitePixels = CountWhitePixels(new Rect(bounds.Left, row, bounds.Width, 1));
-                if (rowWhitePixels >= BodyTextBandRowWhiteMinimum)
+                if (rowWhitePixels >= rowWhiteMinimum)
                 {
                     currentBandHeight++;
                     continue;
                 }
 
-                if (currentBandHeight >= MinimumBodyTextBandHeight)
+                if (currentBandHeight >= minimumBandHeight)
                 {
                     bands++;
                 }
@@ -352,7 +479,7 @@ internal sealed class MaximumSubmissionsPopupDetector
                 currentBandHeight = 0;
             }
 
-            if (currentBandHeight >= MinimumBodyTextBandHeight)
+            if (currentBandHeight >= minimumBandHeight)
             {
                 bands++;
             }
@@ -365,7 +492,7 @@ internal sealed class MaximumSubmissionsPopupDetector
             return GetLargestWhiteContour(bounds)?.Area ?? 0.0;
         }
 
-        public WhiteContour? GetLargestWhiteContour(Rect bounds)
+        private WhiteContour? GetLargestWhiteContour(Rect bounds)
         {
             return GetLargestContour(m_WhiteMask, bounds);
         }
@@ -421,4 +548,12 @@ internal sealed class MaximumSubmissionsPopupDetector
 
         public readonly record struct WhiteContour(double Area, Rect Bounds);
     }
+
+    private enum PopupTitleKind
+    {
+        MaximumSubmissions,
+        SlowDown
+    }
+
+    private readonly record struct PopupCandidateEvidence(Rect Bounds, int Score);
 }

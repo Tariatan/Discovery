@@ -16,14 +16,15 @@ public partial class App
 
         try
         {
-            if (e.Args.Contains("--process-samples", StringComparer.OrdinalIgnoreCase))
+            var startupOptions = ApplicationStartupOptions.Parse(e.Args);
+            if (startupOptions.ProcessSamples)
             {
                 RunSampleProcessing();
                 Shutdown();
                 return;
             }
 
-            var window = new MainWindow();
+            var window = new MainWindow(startupOptions.AutomationMode);
             window.Show();
             base.OnStartup(e);
         }

@@ -9,7 +9,7 @@ public sealed class MaximumSubmissionsPopupDetectorTests
     {
         // Arrange
         using var image = SyntheticDiscoveryImageFactory.CreateMaximumSubmissionsPopupImage();
-        var detector = new MaximumSubmissionsPopupDetector();
+        var detector = new ErrorPopupDetector();
 
         // Act
         var detected = detector.Detect(image);
@@ -19,11 +19,78 @@ public sealed class MaximumSubmissionsPopupDetectorTests
     }
 
     [Fact]
+    public void Detect_ImageContainsSlowDownPopup_ReturnsFalse()
+    {
+        // Arrange
+        using var image = SyntheticDiscoveryImageFactory.CreateSlowDownPopupImage();
+        var detector = new ErrorPopupDetector();
+
+        // Act
+        var detected = detector.Detect(image);
+
+        // Assert
+        Assert.False(detected);
+    }
+
+    [Fact]
+    public void DetectSlowDown_ImageContainsSlowDownPopup_ReturnsTrue()
+    {
+        // Arrange
+        using var image = SyntheticDiscoveryImageFactory.CreateSlowDownPopupImage();
+        var detector = new ErrorPopupDetector();
+
+        // Act
+        var detected = detector.DetectSlowDown(image);
+
+        // Assert
+        Assert.True(detected);
+    }
+
+    [Fact]
+    public void DetectSlowDown_ImageContainsSlowDownPopupWithStaleMaxSubmissionsOverlay_ReturnsTrue()
+    {
+        // Arrange
+        using var image = SyntheticDiscoveryImageFactory.CreateSlowDownPopupImage();
+        Cv2.PutText(
+            image,
+            "Maximum submissions popup detected",
+            new Point(30, 40),
+            HersheyFonts.HersheySimplex,
+            0.8,
+            new Scalar(80, 120, 255),
+            2,
+            LineTypes.AntiAlias);
+        var detector = new ErrorPopupDetector();
+
+        // Act
+        var maxSubmissionsDetected = detector.Detect(image);
+        var slowDownDetected = detector.DetectSlowDown(image);
+
+        // Assert
+        Assert.False(maxSubmissionsDetected);
+        Assert.True(slowDownDetected);
+    }
+
+    [Fact]
+    public void DetectSlowDown_ImageContainsMaximumSubmissionsPopup_ReturnsFalse()
+    {
+        // Arrange
+        using var image = SyntheticDiscoveryImageFactory.CreateMaximumSubmissionsPopupImage();
+        var detector = new ErrorPopupDetector();
+
+        // Act
+        var detected = detector.DetectSlowDown(image);
+
+        // Assert
+        Assert.False(detected);
+    }
+
+    [Fact]
     public void Detect_FullScreenImageContainsMaximumSubmissionsPopupOutsideLegacySearchArea_ReturnsTrue()
     {
         // Arrange
         using var image = SyntheticDiscoveryImageFactory.CreateWideScreenMaximumSubmissionsPopupImage();
-        var detector = new MaximumSubmissionsPopupDetector();
+        var detector = new ErrorPopupDetector();
 
         // Act
         var detected = detector.Detect(image);
@@ -37,7 +104,7 @@ public sealed class MaximumSubmissionsPopupDetectorTests
     {
         // Arrange
         using var image = CreateCompactDimMaximumSubmissionsPopupImage();
-        var detector = new MaximumSubmissionsPopupDetector();
+        var detector = new ErrorPopupDetector();
 
         // Act
         var detected = detector.Detect(image);
@@ -51,7 +118,7 @@ public sealed class MaximumSubmissionsPopupDetectorTests
     {
         // Arrange
         using var image = SyntheticDiscoveryImageFactory.CreateTwoClusterImage();
-        var detector = new MaximumSubmissionsPopupDetector();
+        var detector = new ErrorPopupDetector();
 
         // Act
         var detected = detector.Detect(image);
@@ -65,7 +132,7 @@ public sealed class MaximumSubmissionsPopupDetectorTests
     {
         // Arrange
         using var image = CreateBusyPilotSelectionImage();
-        var detector = new MaximumSubmissionsPopupDetector();
+        var detector = new ErrorPopupDetector();
 
         // Act
         var detected = detector.Detect(image);
@@ -79,7 +146,7 @@ public sealed class MaximumSubmissionsPopupDetectorTests
     {
         // Arrange
         using var image = CreateProjectDiscoveryInstructionImage();
-        var detector = new MaximumSubmissionsPopupDetector();
+        var detector = new ErrorPopupDetector();
 
         // Act
         var detected = detector.Detect(image);
@@ -93,7 +160,7 @@ public sealed class MaximumSubmissionsPopupDetectorTests
     {
         // Arrange
         using var image = CreateSubmissionResultImage();
-        var detector = new MaximumSubmissionsPopupDetector();
+        var detector = new ErrorPopupDetector();
 
         // Act
         var detected = detector.Detect(image);
@@ -107,7 +174,7 @@ public sealed class MaximumSubmissionsPopupDetectorTests
     {
         // Arrange
         using var image = CreateBottomInventoryGridImage();
-        var detector = new MaximumSubmissionsPopupDetector();
+        var detector = new ErrorPopupDetector();
 
         // Act
         var detected = detector.Detect(image);

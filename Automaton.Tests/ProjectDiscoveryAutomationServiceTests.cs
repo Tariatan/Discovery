@@ -283,11 +283,13 @@ public sealed class ProjectDiscoveryAutomationServiceTests
         Assert.Equal(3, captureInvocationCount);
         Assert.Equal(summary.ClickedPointCount + 2, automationInputController.ClickCount);
         Assert.Equal(new Point(pilotAvatarLocation.X + 32, pilotAvatarLocation.Y + 32), automationInputController.MoveTargets[^1]);
-        Assert.Equal(3, automationInputController.KeyboardInputs.Count);
+        Assert.Equal(5, automationInputController.KeyboardInputs.Count);
         AssertKeyChord(automationInputController.KeyboardInputs[0], VirtualKeyAlt, VirtualKeyQ);
         AssertKey(automationInputController.KeyboardInputs[1], VirtualKeyEnter);
-        AssertKeyChord(automationInputController.KeyboardInputs[2], VirtualKeyAlt, VirtualKeyL);
-        Assert.Contains(20_000, automationInputController.Delays);
+        AssertKeyChord(automationInputController.KeyboardInputs[2], VirtualKeyControl, VirtualKeyW);
+        AssertKeyChord(automationInputController.KeyboardInputs[3], VirtualKeyControl, VirtualKeyW);
+        AssertKeyChord(automationInputController.KeyboardInputs[4], VirtualKeyAlt, VirtualKeyL);
+        Assert.Contains(40_000, automationInputController.Delays);
         Assert.Equal(300, automationInputController.Delays[^1]);
     }
 
@@ -364,7 +366,7 @@ public sealed class ProjectDiscoveryAutomationServiceTests
         var focusedCapturePath = Path.Combine(workspace.Path, "focused-capture.png");
         SyntheticDiscoveryImageFactory.WriteTwoClusterImage(capturePath);
         SyntheticDiscoveryImageFactory.WriteMaximumSubmissionsPopupImageWithPlayfield(focusedCapturePath);
-        Assert.True(new MaximumSubmissionsPopupDetector().Detect(focusedCapturePath));
+        Assert.True(new ErrorPopupDetector().Detect(focusedCapturePath));
 
         var captureInvocationCount = 0;
         var screenCaptureService = new ScreenCaptureService(
@@ -421,6 +423,154 @@ public sealed class ProjectDiscoveryAutomationServiceTests
         Assert.Equal(2, captureInvocationCount);
         Assert.Equal(summary.ClickedPointCount + 3, automationInputController.ClickCount);
         Assert.Empty(automationInputController.KeyboardInputs);
+    }
+
+    [Fact]
+    public void AutomateCurrentScreen_SlowDownPopupAppearsAfterSubmit_WaitsAndResumesAutomation()
+    {
+        // Arrange
+        using var workspace = new TemporaryDirectory();
+        var capturePath = Path.Combine(workspace.Path, "fixture-capture.png");
+        var slowDownPopupPath = Path.Combine(workspace.Path, "slow-down.png");
+        SyntheticDiscoveryImageFactory.WriteTwoClusterImage(capturePath);
+        SyntheticDiscoveryImageFactory.WriteSlowDownPopupImage(slowDownPopupPath);
+
+        var captureInvocationCount = 0;
+        var screenCaptureService = new ScreenCaptureService(
+            new StubScreenCaptureProvider(outputPath =>
+            {
+                captureInvocationCount++;
+                File.Copy(captureInvocationCount == 2 ? slowDownPopupPath : capturePath, outputPath, overwrite: true);
+            }),
+            new SampleImageProcessor());
+        var automationClock = new StubAutomationClock();
+        using var cancellationTokenSource = new CancellationTokenSource();
+        var slowDownRecoveryObserved = false;
+        var normalCycleAfterSlowDownSubmitted = false;
+        var shortDelaysAfterSubmit = 0;
+        var automationInputController = new StubAutomationInputController
+        {
+            OnDelayAdvanceClock = milliseconds => automationClock.AdvanceBy(milliseconds),
+            OnDelay = milliseconds =>
+            {
+                if (milliseconds == 60_000)
+                {
+                    slowDownRecoveryObserved = true;
+                    return;
+                }
+
+                if (!slowDownRecoveryObserved)
+                {
+                    return;
+                }
+
+                if (milliseconds == 4_000)
+                {
+                    normalCycleAfterSlowDownSubmitted = true;
+                    return;
+                }
+
+                if (normalCycleAfterSlowDownSubmitted && milliseconds == 300)
+                {
+                    shortDelaysAfterSubmit++;
+                    if (shortDelaysAfterSubmit >= 2)
+                    {
+                        cancellationTokenSource.Cancel();
+                    }
+                }
+            }
+        };
+        var automationService = new ProjectDiscoveryAutomationService(screenCaptureService, automationInputController, automationClock);
+        var dpi = new System.Windows.DpiScale(1.0, 1.0);
+        AutomationSummary summary;
+
+        // Act
+        var currentDirectory = Directory.GetCurrentDirectory();
+        Directory.SetCurrentDirectory(workspace.Path);
+
+        try
+        {
+            summary = automationService.AutomateCurrentScreen(dpi, cancellationTokenSource.Token);
+        }
+        finally
+        {
+            Directory.SetCurrentDirectory(currentDirectory);
+        }
+
+        // Assert
+        Assert.False(summary.MaximumSubmissionsReached);
+        Assert.False(summary.SlowDownPopupDetected);
+        Assert.True(slowDownRecoveryObserved);
+        Assert.Equal(4, captureInvocationCount);
+        Assert.Equal(2, automationInputController.KeyboardInputs.Count);
+        AssertKeyChord(automationInputController.KeyboardInputs[0], VirtualKeyControl, VirtualKeyW);
+        AssertKeyChord(automationInputController.KeyboardInputs[1], VirtualKeyAlt, VirtualKeyL);
+        Assert.Contains(60_000, automationInputController.Delays);
+    }
+
+    [Fact]
+    public void AutomateCurrentScreen_CurrentScreenContainsSlowDownPopup_WaitsAndResumesWithoutFallbackClicks()
+    {
+        // Arrange
+        using var workspace = new TemporaryDirectory();
+        var slowDownPopupPath = Path.Combine(workspace.Path, "slow-down.png");
+        SyntheticDiscoveryImageFactory.WriteSlowDownPopupImage(slowDownPopupPath);
+
+        var captureInvocationCount = 0;
+        var screenCaptureService = new ScreenCaptureService(
+            new StubScreenCaptureProvider(outputPath =>
+            {
+                captureInvocationCount++;
+                File.Copy(slowDownPopupPath, outputPath, overwrite: true);
+            }),
+            new SampleImageProcessor());
+        var automationClock = new StubAutomationClock();
+        using var cancellationTokenSource = new CancellationTokenSource();
+        var slowDownRecoveryObserved = false;
+        var automationInputController = new StubAutomationInputController
+        {
+            OnDelayAdvanceClock = milliseconds => automationClock.AdvanceBy(milliseconds),
+            OnDelay = milliseconds =>
+            {
+                if (milliseconds == 60_000)
+                {
+                    slowDownRecoveryObserved = true;
+                    return;
+                }
+
+                if (milliseconds == 300 && slowDownRecoveryObserved)
+                {
+                    cancellationTokenSource.Cancel();
+                }
+            }
+        };
+        var automationService = new ProjectDiscoveryAutomationService(screenCaptureService, automationInputController, automationClock);
+        var dpi = new System.Windows.DpiScale(1.0, 1.0);
+        AutomationSummary summary;
+
+        // Act
+        var currentDirectory = Directory.GetCurrentDirectory();
+        Directory.SetCurrentDirectory(workspace.Path);
+
+        try
+        {
+            summary = automationService.AutomateCurrentScreen(dpi, cancellationTokenSource.Token);
+        }
+        finally
+        {
+            Directory.SetCurrentDirectory(currentDirectory);
+        }
+
+        // Assert
+        Assert.True(summary.SlowDownPopupDetected);
+        Assert.False(summary.MaximumSubmissionsReached);
+        Assert.Equal(0, summary.ClickedPointCount);
+        Assert.Equal(0, automationInputController.ClickCount);
+        Assert.Equal(1, captureInvocationCount);
+        Assert.Equal(2, automationInputController.KeyboardInputs.Count);
+        AssertKeyChord(automationInputController.KeyboardInputs[0], VirtualKeyControl, VirtualKeyW);
+        AssertKeyChord(automationInputController.KeyboardInputs[1], VirtualKeyAlt, VirtualKeyL);
+        Assert.Contains(60_000, automationInputController.Delays);
     }
 
     [Fact]
@@ -767,7 +917,7 @@ public sealed class ProjectDiscoveryAutomationServiceTests
         Assert.True(captureInvocationCount >= 11);
         Assert.True(observedLongRateLimitDelay);
         Assert.True(submitTimes.Count >= 6);
-        Assert.True((submitTimes[5] - submitTimes[0]).TotalMilliseconds >= 90_000);
+        Assert.True((submitTimes[5] - submitTimes[0]).TotalMilliseconds >= 70_000);
         AssertNoMoreThanFiveSubmissionsPerMinute(submitTimes);
     }
 
@@ -804,7 +954,6 @@ public sealed class ProjectDiscoveryAutomationServiceTests
         using var cancellationTokenSource = new CancellationTokenSource();
         var submitTimes = new List<DateTime>();
         var pilotSwitchCompleted = false;
-        var observedPostSwitchRateLimitDelay = false;
         var automationInputController = new StubAutomationInputController
         {
             OnDelayAdvanceClock = milliseconds =>
@@ -818,11 +967,6 @@ public sealed class ProjectDiscoveryAutomationServiceTests
             },
             OnDelay = milliseconds =>
             {
-                if (pilotSwitchCompleted && milliseconds > 4_000)
-                {
-                    observedPostSwitchRateLimitDelay = true;
-                }
-
                 if (milliseconds == 4_000)
                 {
                     submitTimes.Add(automationClock.UtcNow.AddMilliseconds(-milliseconds));
@@ -857,10 +1001,59 @@ public sealed class ProjectDiscoveryAutomationServiceTests
         }
 
         // Assert
-        Assert.True(observedPostSwitchRateLimitDelay);
+        Assert.True(pilotSwitchCompleted);
         Assert.True(submitTimes.Count >= 6);
-        Assert.True((submitTimes[5] - submitTimes[0]).TotalMilliseconds >= 90_000);
+        Assert.True((submitTimes[5] - submitTimes[0]).TotalMilliseconds >= 70_000);
         AssertNoMoreThanFiveSubmissionsPerMinute(submitTimes);
+    }
+
+    [Fact]
+    public void AutomateCurrentScreen_PlayfieldMissingFiveTimesInARow_StopsAutomation()
+    {
+        // Arrange
+        using var workspace = new TemporaryDirectory();
+        var capturePath = Path.Combine(workspace.Path, "blank-capture.png");
+        WriteBlankStartupScreen(capturePath);
+        var captureInvocationCount = 0;
+        var screenCaptureService = new ScreenCaptureService(
+            new StubScreenCaptureProvider(outputPath =>
+            {
+                captureInvocationCount++;
+                File.Copy(capturePath, outputPath, overwrite: true);
+            }),
+            new SampleImageProcessor());
+        var automationClock = new StubAutomationClock();
+        var automationInputController = new StubAutomationInputController
+        {
+            OnDelayAdvanceClock = milliseconds => automationClock.AdvanceBy(milliseconds)
+        };
+        var automationService = new ProjectDiscoveryAutomationService(screenCaptureService, automationInputController, automationClock);
+        var dpi = new System.Windows.DpiScale(1.0, 1.0);
+        AutomationSummary summary;
+
+        // Act
+        var currentDirectory = Directory.GetCurrentDirectory();
+        Directory.SetCurrentDirectory(workspace.Path);
+
+        try
+        {
+            summary = automationService.AutomateCurrentScreen(dpi, CancellationToken.None);
+        }
+        finally
+        {
+            Directory.SetCurrentDirectory(currentDirectory);
+        }
+
+        // Assert
+        Assert.True(summary.PlayfieldMissingLimitReached);
+        Assert.False(summary.CaptureSummary.Analysis.Result.PlayfieldFound);
+        Assert.False(summary.MaximumSubmissionsReached);
+        Assert.Equal(0, summary.ClickedPointCount);
+        Assert.Null(summary.ControlButtonBounds);
+        Assert.Equal(string.Empty, summary.FocusedCapturePath);
+        Assert.Equal(9, captureInvocationCount);
+        Assert.Equal(4, automationInputController.Delays.Count(milliseconds => milliseconds == 4_000));
+        Assert.Empty(automationInputController.KeyboardInputs);
     }
 
     private sealed class StubScreenCaptureProvider(Action<string> captureAction)

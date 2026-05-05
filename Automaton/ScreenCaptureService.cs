@@ -12,6 +12,10 @@ internal sealed class ScreenCaptureService
     private const string CaptureFilePrefix = "capture-";
     private const string CaptureTimestampFormat = "yyyyMMdd-HHmmss";
     private const int MinimumCaptureDimension = 1;
+    private const int GameCaptureLeft = 0;
+    private const int GameCaptureTop = 0;
+    private const int GameCaptureWidth = 2_560;
+    private const int GameCaptureHeight = 2_160;
     private const int VirtualScreenLeftMetric = 76;
     private const int VirtualScreenTopMetric = 77;
     private const int VirtualScreenWidthMetric = 78;
@@ -90,6 +94,23 @@ internal sealed class ScreenCaptureService
         return m_SampleImageProcessor.AnalyzeImageFile(imagePath, writeAnnotatedOutput);
     }
 
+    internal static Rectangle BuildGameCaptureBounds(Rectangle virtualScreenBounds)
+    {
+        var gameBounds = new Rectangle(
+            GameCaptureLeft,
+            GameCaptureTop,
+            GameCaptureWidth,
+            GameCaptureHeight);
+        var captureBounds = Rectangle.Intersect(virtualScreenBounds, gameBounds);
+        if (captureBounds.Width < MinimumCaptureDimension ||
+            captureBounds.Height < MinimumCaptureDimension)
+        {
+            return virtualScreenBounds;
+        }
+
+        return captureBounds;
+    }
+
     internal interface IScreenCaptureProvider
     {
         void CaptureToFile(string outputPath);
@@ -99,12 +120,17 @@ internal sealed class ScreenCaptureService
     {
         public void CaptureToFile(string outputPath)
         {
-            var bounds = GetPhysicalVirtualScreenBounds();
+            var bounds = GetPhysicalGameCaptureBounds();
 
             using var bitmap = new Bitmap(bounds.Width, bounds.Height);
             using var graphics = Graphics.FromImage(bitmap);
             graphics.CopyFromScreen(bounds.Left, bounds.Top, 0, 0, bounds.Size);
             bitmap.Save(outputPath, ImageFormat.Png);
+        }
+
+        private static Rectangle GetPhysicalGameCaptureBounds()
+        {
+            return BuildGameCaptureBounds(GetPhysicalVirtualScreenBounds());
         }
 
         private static Rectangle GetPhysicalVirtualScreenBounds()
